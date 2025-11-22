@@ -1,7 +1,0 @@
-:root { --bg:#0f172a; --panel:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#38bdf8; }
-*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-header{padding:24px 28px;border-bottom:1px solid #1f2937}
-h1{margin:0;font-size:36px;font-weight:800;letter-spacing:.3px}
-.card{background:var(--panel);margin:24px auto;max-width:1100px;border:1px solid #1f2937;border-radius:14px;padding:18px 20px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-h2{margin:0 0 12px 0;font-size:20px;color:var(--accent);font-weight:700}
-pre{white-space:pre-wrap;background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:14px;color:#cbd5e1;min-height:56px}

@@ -10,17 +10,21 @@ BRONZE_ROOT = Path("storage/bronze/weather")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 LOG = logging.getLogger("weather")
 
+# Track success/failure
+SUCCESS_COUNT = 0
+FAILURE_COUNT = 0
+
 HEADERS = {
     "User-Agent": "GridCARE Weather Agent (contact@example.com)",
     "Accept": "application/geo+json",
 }
 
 ISO_COORDS = {
-    "CAISO": (34.0522, -118.2437),
-    "ISONE": (42.3601,  -71.0589),
-    "NYISO": (40.7128,  -74.0060),
-    "SPP":   (35.4676,  -97.5164),
-    "MISO":  (41.8781,  -87.6298),
+    "CAISO": (34.0522, -118.2437),   # Los Angeles
+    "ISONE": (42.3601, -71.0589),     # Boston
+    "NYISO": (40.7128, -74.0060),     # New York
+    "SPP": (35.4676, -97.5164),       # Oklahoma City
+    "MISO": (41.8781, -87.6298),      # Chicago
 }
 
 # ---------- time helpers ----------
@@ -38,6 +42,8 @@ def _ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
 
 def _save_parquet(df: pd.DataFrame, iso: str) -> None:
+    global SUCCESS_COUNT
+    
     if df.empty:
         LOG.warning(f"{iso}: no rows to write")
         return
@@ -49,17 +55,20 @@ def _save_parquet(df: pd.DataFrame, iso: str) -> None:
     _ensure_dir(out_dir)
     out_file = out_dir / f"{iso}_weather.parquet"
 
-    out = pd.DataFrame(
-        {
-            "timestamp": _utc_naive_string(df["timestamp"]),
-            "temperature": pd.to_numeric(df["temperature"], errors="coerce"),
-            "wind_speed": pd.to_numeric(df["wind_speed"], errors="coerce"),
-            "humidity": pd.to_numeric(df["humidity"], errors="coerce"),
-        }
-    ).dropna(subset=["timestamp"])
+    out = pd.DataFrame({
+        "timestamp": _utc_naive_string(df["timestamp"]),
+        "temperature": pd.to_numeric(df["temperature"], errors="coerce"),
+        "wind_speed": pd.to_numeric(df["wind_speed"], errors="coerce"),
+        "humidity": pd.to_numeric(df["humidity"], errors="coerce"),
+    }).dropna(subset=["timestamp"])
+
+    if out.empty:
+        LOG.warning(f"{iso}: No valid data after cleaning")
+        return
 
     out.to_parquet(out_file, index=False)
-    LOG.info(f"{iso}: wrote {len(out)} rows -> {out_file}")
+    SUCCESS_COUNT += 1
+    LOG.info(f"✅ {iso}: Saved {len(out)} rows → {out_file}")
 
 # ---------- NOAA calls ----------
 def _station_ids_for_point(lat: float, lon: float, max_n: int = 6) -> List[str]:
@@ -80,69 +89,93 @@ def _collect_recent_observations(station_id: str, limit: int = 400) -> pd.DataFr
     r.raise_for_status()
     feats = r.json().get("features", [])
     rows: List[Dict[str, Any]] = []
+    
     for f in feats:
         p = f.get("properties", {})
-        rows.append(
-            {
-                "timestamp": p.get("timestamp"),
-                "temperature": (p.get("temperature", {}) or {}).get("value"),
-                "wind_speed": (p.get("windSpeed", {}) or {}).get("value"),
-                "humidity": (p.get("relativeHumidity", {}) or {}).get("value"),
-            }
-        )
+        rows.append({
+            "timestamp": p.get("timestamp"),
+            "temperature": (p.get("temperature", {}) or {}).get("value"),
+            "wind_speed": (p.get("windSpeed", {}) or {}).get("value"),
+            "humidity": (p.get("relativeHumidity", {}) or {}).get("value"),
+        })
 
     if not rows:
         return pd.DataFrame(columns=["timestamp", "temperature", "wind_speed", "humidity"])
 
     df = pd.DataFrame(rows)
     df["timestamp"] = _to_utc(df["timestamp"])
+    
     for c in ["temperature", "wind_speed", "humidity"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
+    
     df = df.dropna(subset=["timestamp"])
     return df
 
 # ---------- driver ----------
 def fetch_iso_weather(iso: str, lat: float, lon: float) -> None:
+    global FAILURE_COUNT
+    
     try:
-        LOG.info(f"{iso}: resolving stations near {lat},{lon}")
+        LOG.info(f"{iso}: Resolving stations near {lat},{lon}")
         stations = _station_ids_for_point(lat, lon, max_n=6)
+        
         if not stations:
-            LOG.warning(f"{iso}: no stations found near point")
+            FAILURE_COUNT += 1
+            LOG.warning(f"❌ {iso}: No stations found near point")
             return
 
         dfs: List[pd.DataFrame] = []
         for sid in stations:
             try:
-                LOG.info(f"{iso}: fetching observations from {sid}")
+                LOG.info(f"{iso}: Fetching observations from {sid}")
                 df = _collect_recent_observations(sid, limit=400)
                 if not df.empty:
                     dfs.append(df)
             except requests.HTTPError as he:
-                LOG.warning(f"{iso}: station {sid} http {he}")
+                LOG.warning(f"{iso}: Station {sid} HTTP {he.response.status_code}")
             except Exception as e:
-                LOG.warning(f"{iso}: station {sid} error {e}")
+                LOG.warning(f"{iso}: Station {sid} error - {e}")
 
         if not dfs:
-            LOG.warning(f"{iso}: observations empty from all stations")
+            FAILURE_COUNT += 1
+            LOG.warning(f"❌ {iso}: All stations returned empty data")
             return
 
         all_obs = pd.concat(dfs, ignore_index=True).sort_values("timestamp").drop_duplicates(subset=["timestamp"])
 
-        # Keep last 48 hours without localizing an already tz-aware object
+        # Keep last 48 hours
         cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=48)
         all_obs = all_obs[all_obs["timestamp"] >= cutoff]
 
         _save_parquet(all_obs, iso)
 
     except requests.HTTPError as he:
-        LOG.error(f"{iso}: weather ingestion http error {he}")
+        FAILURE_COUNT += 1
+        LOG.error(f"❌ {iso}: HTTP error {he.response.status_code}")
     except Exception as e:
-        LOG.error(f"{iso}: weather ingestion error {e}")
+        FAILURE_COUNT += 1
+        LOG.error(f"❌ {iso}: Weather ingestion error - {e}")
 
 def main():
+    LOG.info("=" * 60)
+    LOG.info("Starting Weather Ingestion")
+    LOG.info("=" * 60)
+    
+    # Ensure storage directory exists
+    _ensure_dir(BRONZE_ROOT)
+    
     for iso, (lat, lon) in ISO_COORDS.items():
         fetch_iso_weather(iso, lat, lon)
-    LOG.info("Weather ingestion completed.")
+    
+    LOG.info("=" * 60)
+    LOG.info(f"Weather Ingestion Complete: {SUCCESS_COUNT} succeeded, {FAILURE_COUNT} failed")
+    LOG.info("=" * 60)
+    
+    # Don't exit with error even if some failed (weather is supplementary)
+    if SUCCESS_COUNT == 0:
+        LOG.warning("⚠️  ALL weather ingestions failed! Weather data will be unavailable.")
+    
+    exit(0)
 
 if __name__ == "__main__":
     main()

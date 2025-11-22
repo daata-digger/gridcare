@@ -1,265 +1,274 @@
-from pyspark.sql import SparkSession, functions as F
-from pyspark.sql.window import Window
+import logging
+import pandas as pd
+from datetime import datetime, timezone
+from pathlib import Path
+import warnings
+warnings.filterwarnings('ignore')
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+BRONZE_GRID_ROOT = Path("storage/bronze/grid/load")
+BRONZE_WEATHER_ROOT = Path("storage/bronze/weather")
+SILVER_GRID = Path("storage/silver/grid_clean")
+SILVER_WEATHER = Path("storage/silver/weather_clean")
+SILVER_ENRICHED = Path("storage/silver/grid_weather_enriched")
+
+# Create output directories
+SILVER_GRID.mkdir(parents=True, exist_ok=True)
+SILVER_WEATHER.mkdir(parents=True, exist_ok=True)
+SILVER_ENRICHED.mkdir(parents=True, exist_ok=True)
+
+QUALITY_METRICS = {
+    "grid_rows_read": 0,
+    "grid_rows_cleaned": 0,
+    "grid_rows_dropped": 0,
+    "weather_rows_read": 0,
+    "weather_rows_cleaned": 0,
+    "weather_rows_dropped": 0,
+    "enriched_rows": 0
+}
 
 
-BRONZE_GRID_ROOT = "storage/bronze/grid/load"
-BRONZE_WEATHER_ROOT = "storage/bronze/weather"
-SILVER_GRID = "storage/silver/grid_clean"
-SILVER_WEATHER = "storage/silver/weather_clean"
-SILVER_ENRICHED = "storage/silver/grid_weather_enriched"
-
-
-def spark_session() -> SparkSession:
-    return (
-        SparkSession.builder.appName("bronze_to_silver")
-        # Parse files even if some are missing or slightly malformed
-        .config("spark.sql.files.ignoreCorruptFiles", "true")
-        .config("spark.sql.files.ignoreMissingFiles", "true")
-        # Keep legacy parser for lenient date handling
-        .config("spark.sql.legacy.timeParserPolicy", "LEGACY")
-        # Force the session timezone to UTC so timestamps are consistent
-        .config("spark.sql.session.timeZone", "UTC")
-        .getOrCreate()
-    )
-
-
-def _iso_from_path(col):
-    # Works with file:/// URLs and both separators
-    # Example: file:///project/storage/bronze/grid/load/NYISO/2025-11-21/NYISO_load.parquet
-    p = F.input_file_name()
-    # First split on '/grid/load/' or '\grid\load\' then take the next path token
-    return F.coalesce(
-        F.element_at(F.split(F.element_at(F.split(p, "/grid/load/"), 2), "/"), 1),
-        F.element_at(F.split(F.element_at(F.split(p, r"\\grid\\load\\"),
-                                         2), r"\\"), 1),
-    )
-
-
-def _weather_iso_from_path():
-    p = F.input_file_name()
-    return F.coalesce(
-        F.element_at(F.split(F.element_at(F.split(p, "/weather/"), 2), "/"), 1),
-        F.element_at(F.split(F.element_at(F.split(p, r"\\weather\\"),
-                                         2), r"\\"), 1),
-    )
-
-
-def _parse_grid_timestamp(df):
-    """
-    Try several grid timestamp fields and numeric epochs.
-    Assumes any local to UTC conversion was already done in ingestion for those ISOs that need it.
-    """
-    candidates = [
-        "timestamp",          # preferred if present
-        "time_utc",
-        "Time",
-        "Interval Start",
-        "Interval End",
-        "time",
-        "begin",
-        "interval",
-        "x",
-        "datetime",
-        "date",
-        "endtime",
-        "starttime",
+def load_grid_bronze():
+    """Load and clean Bronze grid data using Pandas."""
+    logging.info("=" * 60)
+    logging.info("STEP 1: Loading Bronze Grid Data")
+    logging.info("=" * 60)
+    
+    # Find all parquet files
+    parquet_files = list(BRONZE_GRID_ROOT.rglob("*.parquet"))
+    
+    if not parquet_files:
+        logging.error("❌ No Bronze grid data found!")
+        return None
+    
+    logging.info(f"📁 Found {len(parquet_files)} parquet files")
+    
+    # Load all files
+    dfs = []
+    for file in parquet_files:
+        df = pd.read_parquet(file)
+        # Extract ISO from path
+        iso = file.parent.name
+        df['iso_code'] = iso
+        dfs.append(df)
+    
+    df = pd.concat(dfs, ignore_index=True)
+    QUALITY_METRICS["grid_rows_read"] = len(df)
+    logging.info(f"📥 Read {QUALITY_METRICS['grid_rows_read']:,} raw grid rows")
+    
+    # Clean data
+    # Try to find timestamp column
+    ts_cols = ['timestamp', 'Time', 'Interval End', 'Interval Start', 'time', 'time_utc']
+    ts_col = next((c for c in ts_cols if c in df.columns), None)
+    
+    # Try to find load column
+    load_cols = ['load', 'Load', 'value', 'MW', 'MWh']
+    load_col = next((c for c in load_cols if c in df.columns), None)
+    
+    if not ts_col or not load_col:
+        logging.error("❌ Missing required columns")
+        return None
+    
+    # Rename columns
+    df = df.rename(columns={ts_col: 'timestamp_utc', load_col: 'load_mw'})
+    
+    # Convert types
+    df['timestamp_utc'] = pd.to_datetime(df['timestamp_utc'], errors='coerce')
+    df['load_mw'] = pd.to_numeric(df['load_mw'], errors='coerce')
+    
+    # Filter invalid data
+    df = df[
+        df['iso_code'].notna() &
+        (df['iso_code'] != '') &
+        df['timestamp_utc'].notna() &
+        df['load_mw'].notna() &
+        (df['load_mw'] > 0) &
+        (df['load_mw'] < 1000000)
     ]
-    # Coalesce available columns to a string
-    ts_str = None
-    for c in candidates:
-        if c in df.columns:
-            ts_str = F.coalesce(ts_str, F.col(c).cast("string")) if ts_str is not None else F.col(c).cast("string")
-
-    if ts_str is None:
-        return df.withColumn("timestamp_utc_tmp", F.lit(None).cast("timestamp"))
-
-    # Try to parse as standard timestamp string
-    ts_as_ts = F.to_timestamp(ts_str)
-
-    # If numeric, decide between seconds and milliseconds based on magnitude
-    only_numeric = F.when(ts_str.rlike(r"^\d+(\.\d+)?$"), ts_str).cast("double")
-    ts_from_ms = F.to_timestamp(F.from_unixtime(only_numeric / F.lit(1000.0)))
-    ts_from_sec = F.to_timestamp(F.from_unixtime(only_numeric))
-
-    ts_epoch = F.when(only_numeric > F.lit(1e11), ts_from_ms).otherwise(ts_from_sec)
-
-    return df.withColumn("timestamp_utc_tmp", F.coalesce(ts_as_ts, ts_epoch))
-
-
-def _parse_grid_load(df):
-    load_candidates = ["load", "Load", "value", "MW", "MWh", "y"]
-    load_col = None
-    for c in load_candidates:
-        if c in df.columns:
-            load_col = F.coalesce(load_col, F.col(c).cast("double")) if load_col is not None else F.col(c).cast("double")
-    return df.withColumn("load_mw_tmp", load_col if load_col is not None else F.lit(None).cast("double"))
-
-
-def load_grid_bronze(spark: SparkSession):
-    print("Reading Bronze grid data...")
-
-    df = (
-        spark.read
-        .option("recursiveFileLookup", "true")
-        .parquet(BRONZE_GRID_ROOT)
-        .withColumn("input_file", F.input_file_name())
-    )
-
-    # Robust iso_code from path for both Linux and Windows style
-    p = F.col("input_file")
-    iso1 = F.regexp_extract(p, r"grid[\\/]+load[\\/]+([^\\/]+)[\\/]+", 1)
-    # as a fallback, split by known anchor and pick next part
-    iso2 = F.element_at(F.split(F.element_at(F.split(p, "/grid/load/"), 2), "/"), 1)
-    iso3 = F.element_at(F.split(F.element_at(F.split(p, r"\\grid\\load\\"),
-                                             2), r"\\"), 1)
-    iso_code = F.coalesce(iso1, iso2, iso3)
-
-    # Candidate timestamp and load columns
-    ts_candidates = ["timestamp","Time","Interval End","Interval Start","time","time_utc","begin","interval","x","datetime","date","endtime","starttime"]
-    load_candidates = ["load","Load","value","MW","MWh","y"]
-
-    ts_cols = [F.col(c).cast("string") for c in ts_candidates if c in df.columns]
-    ts_str = F.coalesce(*ts_cols) if ts_cols else None
-    load_cols = [F.col(c).cast("double") for c in load_candidates if c in df.columns]
-    load_num = F.coalesce(*load_cols) if load_cols else None
-
-    if ts_str is None or load_num is None:
-        raise SystemExit("[GRID] Missing timestamp or load columns in Bronze grid")
-
-    # Two stage parse to catch strings like 'YYYY-MM-DD HH:MM:SS' first
-    ts_fmt = F.to_timestamp(ts_str, "yyyy-MM-dd HH:mm:ss")
-    # Then a generic attempt including numeric epoch seconds or ms
-    ts_try = F.to_timestamp(ts_str)
-    ts_num = F.when(ts_str.rlike(r"^\d+(\.\d+)?$"), ts_str).cast("double")
-    ts_from_ms = F.to_timestamp(F.from_unixtime(ts_num / F.lit(1000.0)))
-    ts_from_sec = F.to_timestamp(F.from_unixtime(ts_num))
-    ts_num_parsed = F.when(ts_num > F.lit(1e11), ts_from_ms).otherwise(ts_from_sec)
-
-    ts_utc = F.coalesce(ts_fmt, ts_try, ts_num_parsed)
-
-    cleaned = (
-        df.select(
-            iso_code.alias("iso_code"),
-            ts_utc.alias("timestamp_utc"),
-            load_num.alias("load_mw"),
-        )
-        .where(F.col("iso_code").isNotNull() & (F.col("iso_code") != ""))
-        .where(F.col("timestamp_utc").isNotNull() & F.col("load_mw").isNotNull())
-        .dropDuplicates(["iso_code", "timestamp_utc"])
-    )
-
-    cleaned.write.mode("overwrite").parquet(SILVER_GRID)
-    print(f"[GRID] Wrote Silver grid → {SILVER_GRID}")
-    cleaned.groupBy("iso_code").count().orderBy("iso_code").show(200, truncate=False)
-    return cleaned
+    
+    # Remove duplicates
+    df = df.drop_duplicates(subset=['iso_code', 'timestamp_utc'])
+    
+    QUALITY_METRICS["grid_rows_cleaned"] = len(df)
+    QUALITY_METRICS["grid_rows_dropped"] = QUALITY_METRICS["grid_rows_read"] - QUALITY_METRICS["grid_rows_cleaned"]
+    
+    logging.info(f"✅ Cleaned {QUALITY_METRICS['grid_rows_cleaned']:,} grid rows")
+    logging.info(f"🗑️ Dropped {QUALITY_METRICS['grid_rows_dropped']:,} invalid rows ({QUALITY_METRICS['grid_rows_dropped']/QUALITY_METRICS['grid_rows_read']*100:.1f}%)")
+    
+    # Save partitioned by ISO
+    for iso in df['iso_code'].unique():
+        iso_df = df[df['iso_code'] == iso][['iso_code', 'timestamp_utc', 'load_mw']]
+        output_path = SILVER_GRID / f"iso_code={iso}"
+        output_path.mkdir(parents=True, exist_ok=True)
+        iso_df.to_parquet(output_path / "data.parquet", index=False)
+    
+    logging.info(f"💾 Wrote Silver grid → {SILVER_GRID}")
+    
+    # Show summary
+    logging.info("\n📊 Grid Data Summary by ISO:")
+    summary = df.groupby('iso_code').agg({
+        'timestamp_utc': ['min', 'max', 'count'],
+        'load_mw': 'mean'
+    }).round(2)
+    print(summary)
+    
+    return df
 
 
-def _parse_wind_speed_to_mph(col):
-    """
-    Handles values like "10 mph", "5 to 10 mph", "12", "20 km/h".
-    We extract the first numeric and cast to double. Units other than mph are left as is
-    since we cannot reliably infer without more context. Adjust if you want strict mph.
-    """
-    first_num = F.regexp_extract(col, r"(\d+(\.\d+)?)", 1)
-    return F.when(first_num == "", None).otherwise(first_num.cast("double"))
+def load_weather_bronze():
+    """Load and clean Bronze weather data using Pandas."""
+    logging.info("=" * 60)
+    logging.info("STEP 2: Loading Bronze Weather Data")
+    logging.info("=" * 60)
+    
+    parquet_files = list(BRONZE_WEATHER_ROOT.rglob("*.parquet"))
+    
+    if not parquet_files:
+        logging.warning("⚠️ No Bronze weather data found!")
+        return None
+    
+    logging.info(f"📁 Found {len(parquet_files)} parquet files")
+    
+    dfs = []
+    for file in parquet_files:
+        df = pd.read_parquet(file)
+        iso = file.parent.name
+        df['iso_code'] = iso
+        dfs.append(df)
+    
+    df = pd.concat(dfs, ignore_index=True)
+    QUALITY_METRICS["weather_rows_read"] = len(df)
+    logging.info(f"📥 Read {QUALITY_METRICS['weather_rows_read']:,} raw weather rows")
+    
+    # Clean data
+    df['timestamp_utc'] = pd.to_datetime(df['timestamp'], errors='coerce')
+    df['temperature'] = pd.to_numeric(df.get('temperature'), errors='coerce')
+    df['wind_speed'] = pd.to_numeric(df.get('wind_speed'), errors='coerce')
+    df['humidity'] = pd.to_numeric(df.get('humidity'), errors='coerce')
+    
+    # Filter valid data
+    df = df[df['timestamp_utc'].notna()]
+    df = df[(df['temperature'].isna()) | ((df['temperature'] >= -50) & (df['temperature'] <= 60))]
+    df = df[(df['humidity'].isna()) | ((df['humidity'] >= 0) & (df['humidity'] <= 100))]
+    df = df[(df['wind_speed'].isna()) | ((df['wind_speed'] >= 0) & (df['wind_speed'] <= 200))]
+    
+    df = df[['iso_code', 'timestamp_utc', 'temperature', 'wind_speed', 'humidity']]
+    
+    QUALITY_METRICS["weather_rows_cleaned"] = len(df)
+    QUALITY_METRICS["weather_rows_dropped"] = QUALITY_METRICS["weather_rows_read"] - QUALITY_METRICS["weather_rows_cleaned"]
+    
+    logging.info(f"✅ Cleaned {QUALITY_METRICS['weather_rows_cleaned']:,} weather rows")
+    logging.info(f"🗑️ Dropped {QUALITY_METRICS['weather_rows_dropped']:,} invalid rows")
+    
+    # Save partitioned by ISO
+    for iso in df['iso_code'].unique():
+        iso_df = df[df['iso_code'] == iso]
+        output_path = SILVER_WEATHER / f"iso_code={iso}"
+        output_path.mkdir(parents=True, exist_ok=True)
+        iso_df.to_parquet(output_path / "data.parquet", index=False)
+    
+    logging.info(f"💾 Wrote Silver weather → {SILVER_WEATHER}")
+    
+    return df
 
 
-def load_weather_bronze(spark):
-    from pyspark.sql import functions as F
-
-    print("Reading Bronze weather data...")
-
-    df = (
-        spark.read
-        .option("recursiveFileLookup", "true")
-        .parquet(BRONZE_WEATHER_ROOT)  # storage/bronze/weather
-        .withColumn("input_file", F.input_file_name())
-    )
-
-    # Derive iso_code from the file path, handling both Linux and Windows separators
-    path = F.col("input_file")
-    iso_from_fwd = F.element_at(F.split(F.element_at(F.split(path, "/weather/"), 2), "/"), 1)
-    iso_from_bwd = F.element_at(F.split(F.element_at(F.split(path, r"\\weather\\"), 2), r"\\"), 1)
-    iso_code = F.coalesce(iso_from_fwd, iso_from_bwd)
-
-    # Our Bronze writer saved UTC-naive strings like "YYYY-MM-DD HH:MM:SS"
-    ts_utc = F.to_timestamp(F.col("timestamp"), "yyyy-MM-dd HH:mm:ss")
-
-    weather_clean = (
-        df.select(
-            iso_code.alias("iso_code"),
-            ts_utc.alias("timestamp_utc"),
-            F.col("temperature").cast("double").alias("temperature"),
-            F.col("wind_speed").cast("double").alias("wind_speed"),
-            F.col("humidity").cast("double").alias("humidity"),
-        )
-        .dropna(subset=["timestamp_utc"])
-    )
-
-    weather_clean.write.mode("overwrite").parquet(SILVER_WEATHER)
-    print(f"[WEATHER] Wrote Silver weather → {SILVER_WEATHER}")
-    weather_clean.groupBy("iso_code").count().orderBy("iso_code").show(200, truncate=False)
-    return weather_clean
-
-
-def enrich_grid_with_weather(grid_clean, weather_clean):
-    if grid_clean is None or weather_clean is None:
-        print("[ENRICH] Missing inputs, skipping")
+def enrich_grid_with_weather(grid_df, weather_df):
+    """Join grid and weather data."""
+    logging.info("=" * 60)
+    logging.info("STEP 3: Enriching Grid Data with Weather")
+    logging.info("=" * 60)
+    
+    if grid_df is None:
+        logging.error("❌ No grid data to enrich")
         return
-
-    print("Joining grid and weather using nearest timestamp within 60 minutes per iso_code")
-
-    # Prepare
-    gc = grid_clean.select(
-        F.col("iso_code").alias("iso_g"),
-        F.col("timestamp_utc").alias("ts_g"),
-        F.col("load_mw")
-    )
-    wc = weather_clean.select(
-        F.col("iso_code").alias("iso_w"),
-        F.col("timestamp_utc").alias("ts_w"),
-        F.col("temperature"),
-        F.col("wind_speed"),
-        F.col("humidity")
-    )
-
-    # Candidate pairs within 60 minutes
-    cand = (
-        gc.join(wc, gc.iso_g == wc.iso_w, "left")
-          .withColumn("dt_sec", F.abs(F.unix_timestamp("ts_g") - F.unix_timestamp("ts_w")))
-          .where(F.col("dt_sec") <= F.lit(3600))
-    )
-
-    # Pick closest weather per grid timestamp
-    w = Window.partitionBy("iso_g", "ts_g").orderBy(F.col("dt_sec").asc())
-    nearest = cand.withColumn("rn", F.row_number().over(w)).where(F.col("rn") == 1)
-
-    enriched = (
-        nearest.select(
-            F.col("iso_g").alias("iso_code"),
-            F.col("ts_g").alias("timestamp_utc"),
-            F.date_trunc("hour", F.col("ts_g")).alias("hour"),
-            F.col("load_mw"),
-            F.col("temperature").cast("double"),
-            F.col("wind_speed").cast("double"),
-            F.col("humidity").cast("double"),
-            F.lit(None).cast("double").alias("solar_irradiance_proxy"),
+    
+    if weather_df is None:
+        logging.warning("⚠️ No weather data - creating enriched table without weather")
+        enriched = grid_df.copy()
+        enriched['hour'] = enriched['timestamp_utc'].dt.floor('H')
+        enriched['temperature'] = None
+        enriched['wind_speed'] = None
+        enriched['humidity'] = None
+        enriched['solar_irradiance_proxy'] = None
+    else:
+        # Merge on ISO and nearest timestamp (within 60 min)
+        enriched = pd.merge_asof(
+            grid_df.sort_values('timestamp_utc'),
+            weather_df.sort_values('timestamp_utc'),
+            on='timestamp_utc',
+            by='iso_code',
+            tolerance=pd.Timedelta('60min'),
+            direction='nearest'
         )
-    )
+        enriched['hour'] = enriched['timestamp_utc'].dt.floor('H')
+        enriched['solar_irradiance_proxy'] = None
+    
+    QUALITY_METRICS["enriched_rows"] = len(enriched)
+    logging.info(f"✅ Created {QUALITY_METRICS['enriched_rows']:,} enriched rows")
+    
+    if weather_df is not None:
+        with_weather = enriched['temperature'].notna().sum()
+        join_rate = (with_weather / QUALITY_METRICS['enriched_rows'] * 100) if QUALITY_METRICS['enriched_rows'] > 0 else 0
+        logging.info(f"🌤️ Weather join rate: {join_rate:.1f}% ({with_weather:,} rows have weather data)")
+    
+    # Save partitioned by ISO
+    for iso in enriched['iso_code'].unique():
+        iso_df = enriched[enriched['iso_code'] == iso]
+        output_path = SILVER_ENRICHED / f"iso_code={iso}"
+        output_path.mkdir(parents=True, exist_ok=True)
+        iso_df.to_parquet(output_path / "data.parquet", index=False)
+    
+    logging.info(f"💾 Wrote Silver enriched → {SILVER_ENRICHED}")
 
-    enriched.write.mode("overwrite").parquet(SILVER_ENRICHED)
-    print(f"[ENRICH] Wrote Silver enriched → {SILVER_ENRICHED}")
-    enriched.groupBy("iso_code").count().orderBy("iso_code").show(200, truncate=False)
+
+def print_quality_report():
+    """Print final quality report."""
+    logging.info("\n" + "=" * 60)
+    logging.info("📋 DATA QUALITY REPORT")
+    logging.info("=" * 60)
+    
+    logging.info("\n📹 Grid Data:")
+    logging.info(f"  Raw rows:     {QUALITY_METRICS['grid_rows_read']:>10,}")
+    logging.info(f"  Cleaned rows: {QUALITY_METRICS['grid_rows_cleaned']:>10,}")
+    logging.info(f"  Dropped rows: {QUALITY_METRICS['grid_rows_dropped']:>10,}")
+    if QUALITY_METRICS['grid_rows_read'] > 0:
+        logging.info(f"  Quality rate: {QUALITY_METRICS['grid_rows_cleaned']/QUALITY_METRICS['grid_rows_read']*100:>9.1f}%")
+    
+    logging.info("\n📹 Weather Data:")
+    logging.info(f"  Raw rows:     {QUALITY_METRICS['weather_rows_read']:>10,}")
+    logging.info(f"  Cleaned rows: {QUALITY_METRICS['weather_rows_cleaned']:>10,}")
+    logging.info(f"  Dropped rows: {QUALITY_METRICS['weather_rows_dropped']:>10,}")
+    if QUALITY_METRICS['weather_rows_read'] > 0:
+        logging.info(f"  Quality rate: {QUALITY_METRICS['weather_rows_cleaned']/QUALITY_METRICS['weather_rows_read']*100:>9.1f}%")
+    
+    logging.info(f"\n📹 Enriched rows: {QUALITY_METRICS['enriched_rows']:>10,}")
+    logging.info("=" * 60)
 
 
 def main():
-    spark = spark_session()
+    start_time = datetime.now(timezone.utc)
+    logging.info("=" * 60)
+    logging.info("🚀 Bronze → Silver Transformation Started (Pandas)")
+    logging.info(f"⏰ Start time: {start_time.isoformat()}")
+    logging.info("=" * 60)
+    
     try:
-        grid_clean = load_grid_bronze(spark)
-        weather_clean = load_weather_bronze(spark)
-        enrich_grid_with_weather(grid_clean, weather_clean)
-    finally:
-        spark.stop()
+        grid_df = load_grid_bronze()
+        weather_df = load_weather_bronze()
+        enrich_grid_with_weather(grid_df, weather_df)
+        print_quality_report()
+        
+        end_time = datetime.now(timezone.utc)
+        duration = (end_time - start_time).total_seconds()
+        
+        logging.info("\n" + "=" * 60)
+        logging.info(f"✅ Transformation Complete in {duration:.1f}s")
+        logging.info("=" * 60)
+        
+    except Exception as e:
+        logging.error(f"❌ Transformation failed: {e}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":

@@ -1,0 +1,22 @@
+============================================================
+GRIDCARE ENERGY DATA INSIGHTS
+============================================================
+
+Generated: 2025-11-22T22:26:43.701609+00:00
+
+  • 2025-11-21: Peak load at hour 15:00 (24446 MW)
+  • 2025-11-22: Peak load at hour 0:00 (66902 MW)
+  • CAISO: Peak load at hour 15:00 (24598 MW)
+  • ISONE: Peak load at hour 12:00 (15126 MW)
+  • NYISO: Peak load at hour 12:00 (18151 MW)
+  • SPP: Peak load at hour 16:00 (31822 MW)
+  • CAISO: Temperature correlation = 0.683
+  • ISONE: Temperature correlation = -0.243
+  • NYISO: Temperature correlation = -0.322
+  • SPP: Temperature correlation = -0.421
+  • 2025-11-21: Coefficient of variation = 23.9%
+  • 2025-11-22: Coefficient of variation = 67.6%
+  • CAISO: Coefficient of variation = 7.8%
+  • ISONE: Coefficient of variation = 9.7%
+  • NYISO: Coefficient of variation = 6.7%
+  • SPP: Coefficient of variation = 7.4%

@@ -1,153 +1,340 @@
-# pipelines/transform/silver_to_gold.py
-import os
-from pathlib import Path
+import logging
 import pandas as pd
+import numpy as np
+from datetime import datetime, timezone
+from pathlib import Path
+import warnings
+warnings.filterwarnings('ignore')
 
-def stringify_ts(df, cols):
-    """Return a new DF with given timestamp/date cols converted to ISO strings."""
-    out = df
-    for c in cols:
-        if c in out.columns:
-            out = out.withColumn(c, F.date_format(F.col(c), "yyyy-MM-dd HH:mm:ss"))
-    return out
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Paths
+SILVER_ENRICHED = Path("storage/silver/grid_weather_enriched")
+GOLD_ROOT = Path("storage/gold")
+GOLD_HOURLY = GOLD_ROOT / "hourly_metrics"
+GOLD_DAILY = GOLD_ROOT / "daily_metrics"
+GOLD_ISO_SUMMARY = GOLD_ROOT / "iso_summary"
+
+# Create output directories
+GOLD_HOURLY.mkdir(parents=True, exist_ok=True)
+GOLD_DAILY.mkdir(parents=True, exist_ok=True)
+GOLD_ISO_SUMMARY.mkdir(parents=True, exist_ok=True)
 
 
-from pyspark.sql import SparkSession, functions as F
+def load_silver_enriched():
+    """Load Silver enriched data."""
+    logging.info("\n📥 Loading Silver enriched data...")
+    
+    parquet_files = list(SILVER_ENRICHED.rglob("*.parquet"))
+    
+    if not parquet_files:
+        logging.error("❌ No Silver enriched data found!")
+        return None
+    
+    dfs = []
+    for file in parquet_files:
+        df = pd.read_parquet(file)
+        dfs.append(df)
+    
+    df = pd.concat(dfs, ignore_index=True)
+    logging.info(f"✅ Loaded {len(df):,} enriched rows")
+    
+    # Ensure datetime types
+    df['timestamp_utc'] = pd.to_datetime(df['timestamp_utc'])
+    df['hour'] = pd.to_datetime(df['hour'])
+    
+    return df
 
-SILVER_GRID = "storage/silver/grid_clean"
-SILVER_WEATHER = "storage/silver/weather_clean"
-SILVER_ENRICHED = "storage/silver/grid_weather_enriched"
 
-GOLD_ROOT = "storage/gold"
-GOLD_HOURLY = f"{GOLD_ROOT}/iso_hourly_demand"
-GOLD_DAILY = f"{GOLD_ROOT}/iso_daily_demand"
-GOLD_ENRICH = f"{GOLD_ROOT}/iso_hourly_enriched"
+def create_hourly_metrics(df):
+    """Create hourly aggregated metrics."""
+    logging.info("=" * 60)
+    logging.info("STEP 1: Creating Hourly Metrics")
+    logging.info("=" * 60)
+    
+    # Group by ISO and hour
+    hourly = df.groupby(['iso_code', 'hour']).agg({
+        'load_mw': ['mean', 'min', 'max', 'std', 'count'],
+        'temperature': ['mean', 'min', 'max'],
+        'wind_speed': ['mean', 'max'],
+        'humidity': 'mean'
+    }).reset_index()
+    
+    # Flatten column names
+    hourly.columns = [
+        'iso_code', 'hour',
+        'avg_load_mw', 'min_load_mw', 'max_load_mw', 'std_load_mw', 'data_points',
+        'avg_temperature', 'min_temperature', 'max_temperature',
+        'avg_wind_speed', 'max_wind_speed',
+        'avg_humidity'
+    ]
+    
+    # Calculate load variability (coefficient of variation)
+    hourly['load_variability'] = (hourly['std_load_mw'] / hourly['avg_load_mw'] * 100).round(2)
+    
+    # Add time features
+    hourly['hour_of_day'] = hourly['hour'].dt.hour
+    hourly['day_of_week'] = hourly['hour'].dt.dayofweek
+    hourly['is_weekend'] = hourly['day_of_week'].isin([5, 6]).astype(int)
+    
+    # Round numeric columns
+    numeric_cols = hourly.select_dtypes(include=[np.number]).columns
+    hourly[numeric_cols] = hourly[numeric_cols].round(2)
+    
+    logging.info(f"✅ Created {len(hourly):,} hourly metric rows")
+    
+    # Save partitioned by ISO
+    for iso in hourly['iso_code'].unique():
+        iso_df = hourly[hourly['iso_code'] == iso]
+        output_path = GOLD_HOURLY / f"iso_code={iso}"
+        output_path.mkdir(parents=True, exist_ok=True)
+        iso_df.to_parquet(output_path / "data.parquet", index=False)
+    
+    logging.info(f"💾 Wrote Gold hourly metrics → {GOLD_HOURLY}")
+    
+    # Show sample
+    logging.info("\n📊 Sample Hourly Metrics:")
+    print(hourly.head(10).to_string(index=False))
+    
+    return hourly
 
-# Postgres config (matches docker-compose)
-PG_HOST = os.getenv("PG_HOST", "gridcare_db")
-PG_PORT = int(os.getenv("PG_PORT", "5432"))
-PG_DB   = os.getenv("PG_DB", "postgres")
-PG_USER = os.getenv("PG_USER", "postgres")
-PG_PASS = os.getenv("PG_PASS", "postgres")
 
-def spark_session():
-    return (
-        SparkSession.builder.appName("silver_to_gold")
-        .config("spark.sql.files.ignoreCorruptFiles", "true")
-        .config("spark.sql.files.ignoreMissingFiles", "true")
-        .config("spark.sql.legacy.timeParserPolicy", "LEGACY")
-        .getOrCreate()
-    )
+def create_daily_metrics(df):
+    """Create daily aggregated metrics."""
+    logging.info("=" * 60)
+    logging.info("STEP 2: Creating Daily Metrics")
+    logging.info("=" * 60)
+    
+    # Add date column
+    df['date'] = df['timestamp_utc'].dt.date
+    
+    # Group by ISO and date
+    daily = df.groupby(['iso_code', 'date']).agg({
+        'load_mw': ['mean', 'min', 'max', 'std', 'sum', 'count'],
+        'temperature': ['mean', 'min', 'max'],
+        'wind_speed': ['mean', 'max'],
+        'humidity': 'mean'
+    }).reset_index()
+    
+    # Flatten column names
+    daily.columns = [
+        'iso_code', 'date',
+        'avg_load_mw', 'min_load_mw', 'max_load_mw', 'std_load_mw', 'total_load_mwh', 'data_points',
+        'avg_temperature', 'min_temperature', 'max_temperature',
+        'avg_wind_speed', 'max_wind_speed',
+        'avg_humidity'
+    ]
+    
+    # Calculate peak-to-average ratio
+    daily['peak_to_avg_ratio'] = (daily['max_load_mw'] / daily['avg_load_mw']).round(2)
+    
+    # Calculate load factor (how consistently load is at peak)
+    daily['load_factor'] = (daily['avg_load_mw'] / daily['max_load_mw'] * 100).round(2)
+    
+    # Add day of week
+    daily['date'] = pd.to_datetime(daily['date'])
+    daily['day_of_week'] = daily['date'].dt.dayofweek
+    daily['is_weekend'] = daily['day_of_week'].isin([5, 6]).astype(int)
+    daily['day_name'] = daily['date'].dt.day_name()
+    
+    # Round numeric columns
+    numeric_cols = daily.select_dtypes(include=[np.number]).columns
+    daily[numeric_cols] = daily[numeric_cols].round(2)
+    
+    logging.info(f"✅ Created {len(daily):,} daily metric rows")
+    
+    # Save partitioned by ISO
+    for iso in daily['iso_code'].unique():
+        iso_df = daily[daily['iso_code'] == iso]
+        output_path = GOLD_DAILY / f"iso_code={iso}"
+        output_path.mkdir(parents=True, exist_ok=True)
+        iso_df.to_parquet(output_path / "data.parquet", index=False)
+    
+    logging.info(f"💾 Wrote Gold daily metrics → {GOLD_DAILY}")
+    
+    # Show sample
+    logging.info("\n📊 Sample Daily Metrics:")
+    print(daily.head(10).to_string(index=False))
+    
+    return daily
 
-def write_parquet(df, path):
-    df.write.mode("overwrite").parquet(path)
 
-def df_to_postgres(pdf: pd.DataFrame, table: str):
-    from sqlalchemy import create_engine
-    url = f"postgresql+psycopg2://{PG_USER}:{PG_PASS}@{PG_HOST}:{PG_PORT}/{PG_DB}"
-    engine = create_engine(url)
-    # small safety: cast pandas datetime to naive UTC strings for portability
-    for c in pdf.columns:
-        if pd.api.types.is_datetime64_any_dtype(pdf[c]):
-            pdf[c] = pd.to_datetime(pdf[c], utc=True).dt.tz_convert("UTC").dt.tz_localize(None)
-    pdf.to_sql(table, engine, if_exists="replace", index=False)
+def create_iso_summary(df):
+    """Create ISO-level summary statistics."""
+    logging.info("=" * 60)
+    logging.info("STEP 3: Creating ISO Summary")
+    logging.info("=" * 60)
+    
+    # Overall statistics by ISO
+    summary = df.groupby('iso_code').agg({
+        'timestamp_utc': ['min', 'max', 'count'],
+        'load_mw': ['mean', 'min', 'max', 'std'],
+        'temperature': ['mean', 'min', 'max'],
+        'wind_speed': 'mean',
+        'humidity': 'mean'
+    }).reset_index()
+    
+    # Flatten columns
+    summary.columns = [
+        'iso_code',
+        'data_start', 'data_end', 'total_observations',
+        'avg_load_mw', 'min_load_mw', 'max_load_mw', 'std_load_mw',
+        'avg_temperature', 'min_temperature', 'max_temperature',
+        'avg_wind_speed', 'avg_humidity'
+    ]
+    
+    # Calculate data quality metrics
+    summary['data_completeness'] = (
+        df.groupby('iso_code')['temperature'].apply(lambda x: x.notna().sum()) / 
+        df.groupby('iso_code').size() * 100
+    ).round(2).values
+    
+    # Calculate date range in days
+    summary['data_span_days'] = (
+        (summary['data_end'] - summary['data_start']).dt.total_seconds() / 86400
+    ).round(1)
+    
+    # Add capacity factor estimate (if we had capacity data)
+    summary['estimated_capacity_mw'] = (summary['max_load_mw'] * 1.1).round(0)
+    summary['avg_capacity_factor'] = (
+        summary['avg_load_mw'] / summary['estimated_capacity_mw'] * 100
+    ).round(2)
+    
+    # Round numeric columns
+    numeric_cols = summary.select_dtypes(include=[np.number]).columns
+    summary[numeric_cols] = summary[numeric_cols].round(2)
+    
+    logging.info(f"✅ Created ISO summary for {len(summary)} ISOs")
+    
+    # Save
+    summary.to_parquet(GOLD_ISO_SUMMARY / "iso_summary.parquet", index=False)
+    logging.info(f"💾 Wrote Gold ISO summary → {GOLD_ISO_SUMMARY}")
+    
+    # Show full summary
+    logging.info("\n📊 ISO Summary Statistics:")
+    print(summary.to_string(index=False))
+    
+    return summary
+
+
+def generate_insights(hourly, daily, summary):
+    """Generate insights from the data."""
+    logging.info("=" * 60)
+    logging.info("STEP 4: Generating Insights")
+    logging.info("=" * 60)
+    
+    insights = []
+    
+    # 1. Peak demand patterns
+    logging.info("\n🔍 Peak Demand Patterns:")
+    for iso in hourly['iso_code'].unique():
+        iso_hourly = hourly[hourly['iso_code'] == iso]
+        peak_hour = iso_hourly.loc[iso_hourly['avg_load_mw'].idxmax()]
+        insights.append(f"  • {iso}: Peak load at hour {int(peak_hour['hour_of_day'])}:00 ({peak_hour['avg_load_mw']:.0f} MW)")
+        logging.info(insights[-1])
+    
+    # 2. Weekend vs Weekday comparison
+    logging.info("\n🔍 Weekend vs Weekday Load:")
+    for iso in daily['iso_code'].unique():
+        iso_daily = daily[daily['iso_code'] == iso]
+        weekday_avg = iso_daily[iso_daily['is_weekend'] == 0]['avg_load_mw'].mean()
+        weekend_avg = iso_daily[iso_daily['is_weekend'] == 1]['avg_load_mw'].mean()
+        if not pd.isna(weekday_avg) and not pd.isna(weekend_avg):
+            diff_pct = ((weekday_avg - weekend_avg) / weekend_avg * 100)
+            insights.append(f"  • {iso}: Weekday load {diff_pct:+.1f}% vs weekend")
+            logging.info(insights[-1])
+    
+    # 3. Temperature correlation
+    logging.info("\n🔍 Weather Impact (Temperature Correlation):")
+    for iso in hourly['iso_code'].unique():
+        iso_hourly = hourly[hourly['iso_code'] == iso].dropna(subset=['avg_temperature', 'avg_load_mw'])
+        if len(iso_hourly) > 10:
+            corr = iso_hourly['avg_temperature'].corr(iso_hourly['avg_load_mw'])
+            insights.append(f"  • {iso}: Temperature correlation = {corr:.3f}")
+            logging.info(insights[-1])
+    
+    # 4. Load variability
+    logging.info("\n🔍 Load Variability:")
+    for iso in summary['iso_code'].unique():
+        iso_summary = summary[summary['iso_code'] == iso].iloc[0]
+        cv = (iso_summary['std_load_mw'] / iso_summary['avg_load_mw'] * 100)
+        insights.append(f"  • {iso}: Coefficient of variation = {cv:.1f}%")
+        logging.info(insights[-1])
+    
+    # Save insights
+    insights_df = pd.DataFrame({'insight': insights})
+    insights_df.to_parquet(GOLD_ROOT / "insights.parquet", index=False)
+    
+    # Also save as text file
+    with open(GOLD_ROOT / "insights.txt", 'w') as f:
+        f.write("=" * 60 + "\n")
+        f.write("GRIDCARE ENERGY DATA INSIGHTS\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(f"Generated: {datetime.now(timezone.utc).isoformat()}\n\n")
+        for insight in insights:
+            f.write(insight + "\n")
+    
+    logging.info(f"\n💾 Wrote insights → {GOLD_ROOT}/insights.txt")
+
+
+def print_summary_report():
+    """Print final summary report."""
+    logging.info("\n" + "=" * 60)
+    logging.info("📊 GOLD LAYER SUMMARY")
+    logging.info("=" * 60)
+    
+    # Count files
+    hourly_files = len(list(GOLD_HOURLY.rglob("*.parquet")))
+    daily_files = len(list(GOLD_DAILY.rglob("*.parquet")))
+    summary_files = len(list(GOLD_ISO_SUMMARY.rglob("*.parquet")))
+    
+    logging.info(f"\n📁 Gold Layer Assets Created:")
+    logging.info(f"  • Hourly metrics: {hourly_files} partition(s)")
+    logging.info(f"  • Daily metrics: {daily_files} partition(s)")
+    logging.info(f"  • ISO summaries: {summary_files} file(s)")
+    logging.info(f"  • Insights: 1 file")
+    
+    logging.info(f"\n📂 Gold Layer Location: {GOLD_ROOT.absolute()}")
+    logging.info("=" * 60)
+
 
 def main():
-    spark = spark_session()
-
-    # Prefer enriched if available, else join grid+weather on hour
-    if Path(SILVER_ENRICHED).exists():
-        enriched = spark.read.parquet(SILVER_ENRICHED)
-    else:
-        grid = spark.read.parquet(SILVER_GRID)
-        weather = spark.read.parquet(SILVER_WEATHER)
-        g = grid.withColumn("hour", F.date_trunc("hour", F.col("timestamp_utc")))
-        w = weather.withColumn("hour", F.date_trunc("hour", F.col("timestamp_utc")))
-        enriched = (
-            g.join(w, on=[g.iso_code == w.iso_code, g.hour == w.hour], how="left")
-             .select(
-                 g.iso_code.alias("iso_code"),
-                 g.timestamp_utc.alias("timestamp_utc"),
-                 g.load_mw.alias("load_mw"),
-                 F.col("temperature").cast("double").alias("temperature"),
-                 F.col("wind_speed").cast("double").alias("wind_speed"),
-                 F.col("humidity").cast("double").alias("humidity"),
-                 F.col("solar_irradiance_proxy").cast("double").alias("solar_irradiance_proxy"),
-             )
-        )
-
-    # Gold 1: ISO hourly demand
-    hourly = (
-        enriched
-        .withColumn("hour", F.date_trunc("hour", F.col("timestamp_utc")))
-        .groupBy("iso_code", "hour")
-        .agg(
-            F.avg("load_mw").alias("avg_load_mw"),
-            F.max("load_mw").alias("max_load_mw"),
-            F.min("load_mw").alias("min_load_mw"),
-            F.last("load_mw", ignorenulls=True).alias("last_load_mw"),
-            F.avg("temperature").alias("avg_temp"),
-            F.avg("wind_speed").alias("avg_wind"),
-            F.avg("humidity").alias("avg_humidity")
-        )
-        .orderBy("iso_code", "hour")
-    )
-
-    # Gold 2: ISO daily demand
-    daily = (
-        enriched
-        .withColumn("day", F.to_date(F.col("timestamp_utc")))
-        .groupBy("iso_code", "day")
-        .agg(
-            F.sum("load_mw").alias("sum_load_mw"),
-            F.avg("load_mw").alias("avg_load_mw"),
-            F.max("load_mw").alias("max_load_mw"),
-            F.min("load_mw").alias("min_load_mw")
-        )
-        .orderBy("iso_code", "day")
-    )
-
-    # Gold 3: Enriched hourly rows for direct charting
-    enr = (
-        enriched
-        .withColumn("hour", F.date_trunc("hour", F.col("timestamp_utc")))
-        .select(
-            "iso_code", "timestamp_utc", "hour", "load_mw",
-            "temperature", "wind_speed", "humidity", "solar_irradiance_proxy"
-        )
-        .orderBy("iso_code", "timestamp_utc")
-    )
-
-    # Write Gold parquet
-    write_parquet(hourly, GOLD_HOURLY)
-    write_parquet(daily, GOLD_DAILY)
-    write_parquet(enr, GOLD_ENRICH)
-
-    # Load to Postgres using pandas
-    print("[POSTGRES] installing client libraries if missing...")
+    start_time = datetime.now(timezone.utc)
+    logging.info("=" * 60)
+    logging.info("🚀 Silver → Gold Transformation Started (Pandas)")
+    logging.info(f"⏰ Start time: {start_time.isoformat()}")
+    logging.info("=" * 60)
+    
     try:
-        import psycopg2  # noqa
-        import sqlalchemy  # noqa
-    except Exception:
-        import subprocess, sys
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "psycopg2-binary", "SQLAlchemy"])
+        # Load Silver data
+        enriched = load_silver_enriched()
+        
+        if enriched is None or len(enriched) == 0:
+            logging.error("❌ No data to process")
+            return
+        
+        # Create Gold layer aggregations
+        hourly = create_hourly_metrics(enriched)
+        daily = create_daily_metrics(enriched)
+        summary = create_iso_summary(enriched)
+        
+        # Generate insights
+        generate_insights(hourly, daily, summary)
+        
+        # Print summary
+        print_summary_report()
+        
+        end_time = datetime.now(timezone.utc)
+        duration = (end_time - start_time).total_seconds()
+        
+        logging.info("\n" + "=" * 60)
+        logging.info(f"✅ Transformation Complete in {duration:.1f}s")
+        logging.info("=" * 60)
+        
+    except Exception as e:
+        logging.error(f"❌ Transformation failed: {e}", exc_info=True)
+        raise
 
-    print("[POSTGRES] writing tables...")
-    hourly_str = stringify_ts(hourly, ["hour"])
-    df_to_postgres(hourly_str.toPandas(), "grid_iso_hourly_demand")
-
-    # daily has a date column; stringify to keep it simple
-    daily_str = daily.withColumn("day", F.date_format(F.col("day"), "yyyy-MM-dd"))
-    df_to_postgres(daily_str.toPandas(), "grid_iso_daily_demand")
-
-    enr_str = stringify_ts(enr, ["timestamp_utc", "hour"])
-    df_to_postgres(enr_str.toPandas(), "grid_iso_hourly_enriched")
-
-
-    print(f"[GOLD] parquet → {GOLD_ROOT}")
-    print("[POSTGRES] tables → grid_iso_hourly_demand, grid_iso_daily_demand, grid_iso_hourly_enriched")
-
-    spark.stop()
 
 if __name__ == "__main__":
     main()

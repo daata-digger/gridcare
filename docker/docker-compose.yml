@@ -37,6 +37,19 @@ services:
       - "8000:8000"
     restart: unless-stopped
 
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    container_name: gridcare_dashboard
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+
   spark:
     build:
       context: ../spark
@@ -54,7 +67,6 @@ services:
     command: sleep infinity
     restart: unless-stopped
 
-
   airflow-init:
     image: apache/airflow:2.9.2
     container_name: gridcare_airflow_init
@@ -63,12 +75,15 @@ services:
     command: -c "
       mkdir -p /opt/airflow/dags /opt/airflow/logs /opt/airflow/plugins &&
       chown -R 50000:50000 /opt/airflow &&
-      gosu airflow pip install --no-cache-dir apache-airflow-providers-postgres &&
-      gosu airflow airflow db init"
+      pip install --no-cache-dir apache-airflow-providers-postgres &&
+      airflow db migrate &&
+      airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true
+      "
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@db:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@db:5432/postgres
+      AIRFLOW__CORE__FERNET_KEY: "81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs="
     volumes:
       - ../pipelines/airflow_dags:/opt/airflow/dags
       - airflow_logs:/opt/airflow/logs
@@ -84,11 +99,15 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@db:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@db:5432/postgres
+      AIRFLOW__CORE__FERNET_KEY: "81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs="
       _PIP_ADDITIONAL_REQUIREMENTS: "apache-airflow-providers-postgres docker pandas requests pyarrow gridstatus"
     user: "50000:0"
-    depends_on: [airflow-init, db]
-    ports: ["8081:8080"]
+    depends_on: 
+      - airflow-init
+      - db
+    ports: 
+      - "8081:8080"
     volumes:
       - ../pipelines/airflow_dags:/opt/airflow/dags
       - ../:/project
@@ -96,6 +115,7 @@ services:
       - airflow_plugins:/opt/airflow/plugins
       - /var/run/docker.sock:/var/run/docker.sock
     command: webserver
+    restart: unless-stopped
 
   airflow-scheduler:
     image: apache/airflow:2.9.2
@@ -103,10 +123,13 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@db:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@db:5432/postgres
+      AIRFLOW__CORE__FERNET_KEY: "81HqDtbqAywKSOumSha3BhWNOdQ26slT6K0YaZeZyPs="
       _PIP_ADDITIONAL_REQUIREMENTS: "apache-airflow-providers-postgres docker pandas requests pyarrow gridstatus"
     user: "50000:0"
-    depends_on: [airflow-webserver, db]
+    depends_on: 
+      - airflow-webserver
+      - db
     volumes:
       - ../pipelines/airflow_dags:/opt/airflow/dags
       - ../:/project
@@ -114,24 +137,8 @@ services:
       - airflow_plugins:/opt/airflow/plugins
       - /var/run/docker.sock:/var/run/docker.sock
     command: scheduler
-
-  dashboard:
-    image: dashboard:latest
-    build:
-      context: ../dashboard
-      dockerfile: Dockerfile
-    ports: ["8082:8081"]
-    depends_on:
-      - db
-    environment:
-      nvironment:
-      API_URL: http://api:8000
-      PG_HOST: db
-      PG_PORT: 5432
-      PG_DB: postgres
-      PG_USER: postgres
-      PG_PASS: postgres
-
+    restart: unless-stopped
+  
 volumes:
   postgres_data:
   airflow_logs:
