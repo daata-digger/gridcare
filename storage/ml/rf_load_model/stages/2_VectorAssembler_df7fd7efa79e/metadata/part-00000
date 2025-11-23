@@ -1,0 +1,1 @@
+{"class":"org.apache.spark.ml.feature.VectorAssembler","timestamp":1763868815942,"sparkVersion":"3.4.1","uid":"VectorAssembler_df7fd7efa79e","paramMap":{"inputCols":["hour_of_day","day_of_week","temperature","wind_speed","humidity","iso_vec"],"outputCol":"features"},"defaultParamMap":{"handleInvalid":"error","outputCol":"VectorAssembler_df7fd7efa79e__output"}}

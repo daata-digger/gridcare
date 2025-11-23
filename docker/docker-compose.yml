@@ -35,20 +35,83 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      - ../storage:/app/storage:ro  # Read-only access to data
     restart: unless-stopped
 
   dashboard:
-    build:
-      context: ../dashboard
-      dockerfile: Dockerfile
-    container_name: gridcare_dashboard
+    build: .
+    container_name: gridcare-dashboard
+    ports:
+      - "8080:8080"
     environment:
-      API_URL: http://api:8000
+      - API_URL=http://api:8000
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - gridcare-network
+    labels:
+      - "com.gridcare.service=dashboard"
+      - "com.gridcare.description=GridCARE Live Dashboard"
+
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gridcare_prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../monitoring/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
     depends_on:
       - api
-    ports:
-      - "8082:8082"
     restart: unless-stopped
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gridcare_grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../monitoring/grafana:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # PostgreSQL Exporter - Works on Windows
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: gridcare_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:postgres@db:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # NOTE: Node Exporter removed - doesn't work reliably on Windows Docker Desktop
+  # For system metrics on Windows, consider using windows_exporter or 
+  # monitoring from outside Docker
 
   spark:
     build:
@@ -143,3 +206,9 @@ volumes:
   postgres_data:
   airflow_logs:
   airflow_plugins:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  gridcare-network:
+    driver: bridge

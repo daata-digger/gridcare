@@ -1,0 +1,213 @@
+{
+  "dashboard": {
+    "title": "GridCARE Live - Energy Grid Monitoring",
+    "tags": ["gridcare", "energy", "grid"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "Total Grid Load (MW)",
+        "targets": [
+          {
+            "expr": "grid_total_load_mw",
+            "legendFormat": "Total Load",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Megawatts (MW)"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "title": "Renewable Energy Generation (MW)",
+        "targets": [
+          {
+            "expr": "grid_renewable_generation_mw",
+            "legendFormat": "Renewables",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Megawatts (MW)"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+        "type": "graph",
+        "title": "Bronze Tier - Throughput",
+        "targets": [
+          {
+            "expr": "grid_bronze_throughput",
+            "legendFormat": "Bronze Records/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Records/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+        "type": "graph",
+        "title": "Silver Tier - Throughput",
+        "targets": [
+          {
+            "expr": "grid_silver_throughput",
+            "legendFormat": "Silver Records/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Records/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+        "type": "graph",
+        "title": "Gold Tier - Throughput",
+        "targets": [
+          {
+            "expr": "grid_gold_throughput",
+            "legendFormat": "Gold Records/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Records/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "type": "graph",
+        "title": "Average LMP Price",
+        "targets": [
+          {
+            "expr": "grid_avg_lmp_price",
+            "legendFormat": "Avg Price",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "currencyUSD", "label": "$/MWh"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "type": "graph",
+        "title": "Carbon Intensity",
+        "targets": [
+          {
+            "expr": "grid_carbon_intensity",
+            "legendFormat": "Carbon Intensity",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "lbs CO2/MWh"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "type": "graph",
+        "title": "Fuel Generation Mix",
+        "targets": [
+          {
+            "expr": "fuel_generation_percentage{type=\"natural_gas\"}",
+            "legendFormat": "Natural Gas",
+            "refId": "A"
+          },
+          {
+            "expr": "fuel_generation_percentage{type=\"nuclear\"}",
+            "legendFormat": "Nuclear",
+            "refId": "B"
+          },
+          {
+            "expr": "fuel_generation_percentage{type=\"coal\"}",
+            "legendFormat": "Coal",
+            "refId": "C"
+          },
+          {
+            "expr": "fuel_generation_percentage{type=\"wind\"}",
+            "legendFormat": "Wind",
+            "refId": "D"
+          },
+          {
+            "expr": "fuel_generation_percentage{type=\"solar\"}",
+            "legendFormat": "Solar",
+            "refId": "E"
+          },
+          {
+            "expr": "fuel_generation_percentage{type=\"hydro\"}",
+            "legendFormat": "Hydro",
+            "refId": "F"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Percentage"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+        "type": "graph",
+        "title": "ISO Status",
+        "targets": [
+          {
+            "expr": "iso_status{iso=\"CAISO\"}",
+            "legendFormat": "CAISO",
+            "refId": "A"
+          },
+          {
+            "expr": "iso_status{iso=\"ISONE\"}",
+            "legendFormat": "ISONE",
+            "refId": "B"
+          },
+          {
+            "expr": "iso_status{iso=\"NYISO\"}",
+            "legendFormat": "NYISO",
+            "refId": "C"
+          },
+          {
+            "expr": "iso_status{iso=\"MISO\"}",
+            "legendFormat": "MISO",
+            "refId": "D"
+          },
+          {
+            "expr": "iso_status{iso=\"SPP\"}",
+            "legendFormat": "SPP",
+            "refId": "E"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Status (1=Online)"},
+          {"format": "short"}
+        ]
+      }
+    ],
+    "refresh": "30s",
+    "time": {"from": "now-1h", "to": "now"},
+    "timepicker": {
+      "refresh_intervals": ["10s", "30s", "1m", "5m", "15m", "30m", "1h"]
+    }
+  },
+  "overwrite": true
+}

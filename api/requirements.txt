@@ -5,3 +5,5 @@ psycopg2-binary==2.9.9
 pandas==2.2.3
 pydantic==2.9.2
 python-dateutil==2.9.0.post0
+prometheus-client==0.21.0
+psutil==6.1.0

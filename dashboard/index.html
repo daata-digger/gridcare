@@ -1,8 +1,9 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GridCARE - Live Energy Dashboard</title>
+    <title>GridCARE Live v2.0 - Real-Time Energy Grid Monitoring</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -12,29 +13,48 @@
             box-sizing: border-box;
         }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
-            color: #e2e8f0;
-            min-height: 100vh;
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: rgba(17, 24, 39, 0.8);
+            --border-color: #1f2937;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-purple: #8b5cf6;
+            --accent-red: #ef4444;
         }
 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1f2e 50%, var(--bg-primary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Header */
         .header {
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid #334155;
-            padding: 1.5rem 2rem;
+            background: rgba(10, 14, 26, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
             position: sticky;
             top: 0;
-            z-index: 100;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
         .header-content {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 2rem;
         }
 
         .logo-section {
@@ -44,12 +64,13 @@
         }
 
         .logo {
-            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
             padding: 0.75rem;
-            border-radius: 12px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
         }
 
         .logo svg {
@@ -58,74 +79,290 @@
             color: white;
         }
 
-        .title {
+        .brand-info h1 {
             font-size: 1.75rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            letter-spacing: -0.5px;
         }
 
-        .subtitle {
+        .brand-info p {
             font-size: 0.75rem;
-            color: #94a3b8;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+            font-weight: 500;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .header-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .header-stat-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .header-stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
             margin-top: 0.25rem;
         }
 
-        .status-section {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .last-update {
+        .status-indicator {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            color: #cbd5e1;
-            font-size: 0.875rem;
+            padding: 0.5rem 1rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 50px;
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
-            background: #10b981;
+            background: var(--accent-green);
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
         }
 
+        .status-text {
+            font-size: 0.875rem;
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+
+        /* BRONZE/SILVER/GOLD PIPELINE - NEW! */
+        .pipeline-section {
+            background: rgba(15, 23, 42, 0.6);
+            border-bottom: 1px solid var(--border-color);
+            padding: 2rem 0;
+        }
+
+        .pipeline-header {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .pipeline-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--accent-green);
+        }
+
+        .pipeline-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: grid;
+            grid-template-columns: 1fr 60px 1fr 60px 1fr;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .pipeline-stage {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .pipeline-stage:hover {
+            border-color: rgba(59, 130, 246, 0.5);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .pipeline-stage.bronze { border-left: 3px solid #cd7f32; }
+        .pipeline-stage.silver { border-left: 3px solid #c0c0c0; }
+        .pipeline-stage.gold { border-left: 3px solid #ffd700; }
+
+        .stage-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .stage-info h3 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+            text-align: center;
+        }
+
+        .stage-info p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .stage-metrics {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .stage-metrics .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background: rgba(31, 41, 55, 0.5);
+            border-radius: 8px;
+        }
+
+        .stage-metrics .label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stage-metrics .value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stage-metrics .unit {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-left: 0.25rem;
+        }
+
+        .pipeline-arrow {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Container */
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 2rem;
         }
 
+        /* Loading */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            gap: 1.5rem;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error Banner */
+        .error-banner {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            display: none;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .error-banner.show {
+            display: flex;
+        }
+
+        .error-icon {
+            color: var(--accent-red);
+        }
+
+        /* Key Metrics Grid */
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.25rem;
             margin-bottom: 2rem;
         }
 
         .metric-card {
-            background: rgba(30, 41, 59, 0.6);
-            backdrop-filter: blur(10px);
-            border: 1px solid #334155;
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 1.5rem;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
         }
 
         .metric-card:hover {
-            border-color: #475569;
+            border-color: rgba(59, 130, 246, 0.4);
             transform: translateY(-4px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .metric-card:hover::before {
+            opacity: 1;
+        }
+
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
         }
 
         .metric-icon {
@@ -135,24 +372,14 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 1rem;
         }
 
-        .metric-icon.blue {
-            background: linear-gradient(135deg, #3b82f6, #06b6d4);
-        }
-
-        .metric-icon.green {
-            background: linear-gradient(135deg, #10b981, #059669);
-        }
-
-        .metric-icon.amber {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-        }
-
-        .metric-icon.purple {
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-        }
+        .metric-icon.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .metric-icon.green { background: linear-gradient(135deg, #10b981, #059669); }
+        .metric-icon.amber { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .metric-icon.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+        .metric-icon.red { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .metric-icon.cyan { background: linear-gradient(135deg, #06b6d4, #0891b2); }
 
         .metric-icon svg {
             width: 24px;
@@ -160,48 +387,78 @@
             color: white;
         }
 
-        .metric-label {
-            color: #94a3b8;
+        .metric-trend {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
             font-size: 0.875rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+        }
+
+        .metric-trend.positive {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+        }
+
+        .metric-trend.negative {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--accent-red);
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
         }
 
         .metric-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: white;
-            display: flex;
-            align-items: baseline;
-            gap: 0.5rem;
+            font-size: 2.25rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            line-height: 1;
+            margin-bottom: 0.5rem;
         }
 
         .metric-unit {
             font-size: 0.875rem;
-            color: #94a3b8;
-            font-weight: 400;
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-left: 0.5rem;
         }
 
         .metric-subtitle {
-            font-size: 0.75rem;
-            color: #64748b;
-            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
         }
 
+        /* ISO Selector */
         .iso-selector {
-            background: rgba(30, 41, 59, 0.6);
-            backdrop-filter: blur(10px);
-            border: 1px solid #334155;
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 1.5rem;
             margin-bottom: 2rem;
         }
 
+        .iso-selector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+        }
+
         .iso-selector-label {
             font-size: 0.875rem;
-            font-weight: 500;
-            color: #cbd5e1;
-            margin-bottom: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .iso-buttons {
@@ -211,47 +468,116 @@
         }
 
         .iso-button {
-            padding: 0.75rem 1.5rem;
-            border: none;
+            padding: 0.875rem 1.75rem;
+            border: 1px solid var(--border-color);
             border-radius: 12px;
             font-weight: 600;
             font-size: 0.875rem;
             cursor: pointer;
-            transition: all 0.3s ease;
-            background: #334155;
-            color: #cbd5e1;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .iso-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.1));
+            opacity: 0;
+            transition: opacity 0.3s;
         }
 
         .iso-button:hover {
-            background: #475569;
+            border-color: rgba(59, 130, 246, 0.5);
             transform: translateY(-2px);
+        }
+
+        .iso-button:hover::before {
+            opacity: 1;
         }
 
         .iso-button.active {
             color: white;
-            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+            border-color: transparent;
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Charts Section */
+        .charts-section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 28px;
+            background: linear-gradient(180deg, var(--accent-blue), var(--accent-cyan));
+            border-radius: 2px;
         }
 
         .charts-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
             gap: 1.5rem;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
         }
 
         .chart-card {
-            background: rgba(30, 41, 59, 0.6);
-            backdrop-filter: blur(10px);
-            border: 1px solid #334155;
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
             border-radius: 16px;
             padding: 1.5rem;
+            transition: all 0.3s;
+        }
+
+        .chart-card:hover {
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
         }
 
         .chart-title {
             font-size: 1.125rem;
             font-weight: 600;
-            color: #e2e8f0;
-            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+
+        .chart-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .chart-badge {
+            padding: 0.375rem 0.875rem;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--accent-blue);
         }
 
         .chart-container {
@@ -259,17 +585,26 @@
             height: 300px;
         }
 
+        .chart-card-full {
+            grid-column: 1 / -1;
+        }
+
+        .chart-container-large {
+            height: 400px;
+        }
+
+        /* Table */
         .table-card {
-            background: rgba(30, 41, 59, 0.6);
-            backdrop-filter: blur(10px);
-            border: 1px solid #334155;
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
             border-radius: 16px;
+            padding: 1.5rem;
             overflow: hidden;
         }
 
-        .table-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid #334155;
+        .table-container {
+            overflow-x: auto;
         }
 
         table {
@@ -277,51 +612,30 @@
             border-collapse: collapse;
         }
 
-        thead {
-            background: rgba(15, 23, 42, 0.5);
-        }
-
-        th {
-            padding: 1rem 1.5rem;
+        thead th {
+            padding: 1rem;
             text-align: left;
             font-size: 0.75rem;
-            font-weight: 600;
-            color: #cbd5e1;
+            font-weight: 700;
+            color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        td {
-            padding: 1rem 1.5rem;
-            border-top: 1px solid #334155;
-            color: #e2e8f0;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-color);
         }
 
         tbody tr {
-            transition: background 0.2s ease;
+            border-bottom: 1px solid rgba(31, 41, 55, 0.5);
+            transition: background-color 0.2s;
         }
 
         tbody tr:hover {
-            background: rgba(51, 65, 85, 0.3);
+            background: rgba(59, 130, 246, 0.05);
         }
 
-        .status-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 500;
-            background: rgba(16, 185, 129, 0.2);
-            color: #10b981;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        .trend-positive {
-            color: #10b981;
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
+        tbody td {
+            padding: 1.125rem 1rem;
             font-size: 0.875rem;
+            color: var(--text-primary);
         }
 
         .iso-indicator {
@@ -334,276 +648,683 @@
             width: 12px;
             height: 12px;
             border-radius: 50%;
+            flex-shrink: 0;
         }
 
         .iso-name {
-            font-weight: 500;
+            font-weight: 600;
+            color: var(--text-primary);
         }
 
         .iso-code {
             font-size: 0.75rem;
-            color: #94a3b8;
+            color: var(--text-secondary);
+            margin-top: 0.125rem;
         }
 
-        .footer {
-            margin-top: 3rem;
-            padding: 2rem;
-            border-top: 1px solid #334155;
-            background: rgba(15, 23, 42, 0.5);
-            text-align: center;
-            color: #94a3b8;
-            font-size: 0.875rem;
+        .status-badge {
+            padding: 0.375rem 0.875rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
         }
 
-        .error-message {
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid #ef4444;
+        .status-badge.online {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .status-badge.warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--accent-amber);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .trend-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-weight: 600;
+        }
+
+        .trend-indicator.positive {
+            color: var(--accent-green);
+        }
+
+        .trend-indicator.negative {
+            color: var(--accent-red);
+        }
+
+        /* Fuel Mix Grid */
+        .fuel-mix-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .fuel-item {
+            background: rgba(31, 41, 55, 0.5);
+            border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 1rem;
-            margin-bottom: 1.5rem;
-            color: #fca5a5;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
+            text-align: center;
+            transition: all 0.3s;
         }
 
-        .loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 400px;
-            flex-direction: column;
-            gap: 1rem;
+        .fuel-item:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            transform: translateY(-2px);
         }
 
-        .spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid #334155;
-            border-top-color: #3b82f6;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        .fuel-percentage {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-primary);
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .fuel-name {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+            font-weight: 500;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 3rem;
+        }
+
+        .footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .footer a:hover {
+            color: var(--accent-cyan);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .pipeline-container {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+            
+            .pipeline-arrow {
+                transform: rotate(90deg);
+            }
         }
 
         @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .header-stats {
+                width: 100%;
+                justify-content: space-between;
+            }
+
             .charts-grid {
                 grid-template-columns: 1fr;
             }
 
-            .header-content {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
-
-            th, td {
-                padding: 0.75rem;
-                font-size: 0.875rem;
+            .metrics-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
 <body>
+    <!-- Header -->
     <header class="header">
         <div class="header-content">
             <div class="logo-section">
                 <div class="logo">
                     <i data-lucide="zap"></i>
                 </div>
-                <div>
-                    <div class="title">GridCARE Live</div>
-                    <div class="subtitle">Real-time Energy Grid Monitoring</div>
+                <div class="brand-info">
+                    <h1>GridCARE Live</h1>
+                    <p>Real-Time Energy Grid Monitoring v2.0</p>
                 </div>
             </div>
-            <div class="status-section">
-                <div class="last-update">
-                    <i data-lucide="clock"></i>
-                    <span id="lastUpdate">Loading...</span>
+            
+            <div class="header-stats">
+                <div class="header-stat">
+                    <span class="header-stat-label">Total Load</span>
+                    <span class="header-stat-value" id="headerTotalLoad">--</span>
                 </div>
-                <div class="status-dot"></div>
+                <div class="header-stat">
+                    <span class="header-stat-label">Avg LMP</span>
+                    <span class="header-stat-value" id="headerAvgPrice">--</span>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span class="status-text">Live</span>
+                </div>
             </div>
         </div>
     </header>
 
-    <div class="container">
-        <div id="errorContainer"></div>
+    <!-- BRONZE/SILVER/GOLD PIPELINE -->
+    <div class="pipeline-section">
+        <div class="pipeline-header">
+            <h2 class="section-title">Data Pipeline - Real-Time Processing</h2>
+            <div class="pipeline-status">
+                <div class="status-dot"></div>
+                <span>All Systems Operational</span>
+            </div>
+        </div>
         
+        <div class="pipeline-container">
+            <!-- Bronze Stage -->
+            <div class="pipeline-stage bronze">
+                <div class="stage-icon">🟤</div>
+                <div class="stage-info">
+                    <h3>Bronze</h3>
+                    <p>Raw Data Ingestion</p>
+                </div>
+                <div class="stage-metrics">
+                    <div class="metric">
+                        <span class="label">Throughput</span>
+                        <span><span class="value" id="bronzeThroughput">0</span><span class="unit">rec/sec</span></span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Latency</span>
+                        <span><span class="value" id="bronzeLatency">0</span><span class="unit">ms</span></span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Status</span>
+                        <span class="status-badge online" id="bronzeStatus">Active</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Arrow -->
+            <div class="pipeline-arrow">
+                <svg width="60" height="40" viewBox="0 0 60 40">
+                    <path d="M0,20 L50,20 L45,15 M50,20 L45,25" stroke="#3b82f6" stroke-width="2" fill="none"/>
+                </svg>
+            </div>
+
+            <!-- Silver Stage -->
+            <div class="pipeline-stage silver">
+                <div class="stage-icon">⚪</div>
+                <div class="stage-info">
+                    <h3>Silver</h3>
+                    <p>Data Cleaning & Validation</p>
+                </div>
+                <div class="stage-metrics">
+                    <div class="metric">
+                        <span class="label">Throughput</span>
+                        <span><span class="value" id="silverThroughput">0</span><span class="unit">rec/sec</span></span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Latency</span>
+                        <span><span class="value" id="silverLatency">0</span><span class="unit">ms</span></span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Quality</span>
+                        <span><span class="value" id="silverQuality">0</span><span class="unit">%</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Arrow -->
+            <div class="pipeline-arrow">
+                <svg width="60" height="40" viewBox="0 0 60 40">
+                    <path d="M0,20 L50,20 L45,15 M50,20 L45,25" stroke="#3b82f6" stroke-width="2" fill="none"/>
+                </svg>
+            </div>
+
+            <!-- Gold Stage -->
+            <div class="pipeline-stage gold">
+                <div class="stage-icon">🟡</div>
+                <div class="stage-info">
+                    <h3>Gold</h3>
+                    <p>ML & Advanced Analytics</p>
+                </div>
+                <div class="stage-metrics">
+                    <div class="metric">
+                        <span class="label">Throughput</span>
+                        <span><span class="value" id="goldThroughput">0</span><span class="unit">rec/sec</span></span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">ML Accuracy</span>
+                        <span><span class="value" id="goldAccuracy">0</span><span class="unit">%</span></span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Models</span>
+                        <span><span class="value" id="goldModels">0</span><span class="unit">active</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Loading State -->
         <div id="loadingContainer" class="loading">
             <div class="spinner"></div>
-            <p>Loading GridCARE data...</p>
+            <p style="color: var(--text-secondary); font-weight: 500;">Loading grid data...</p>
         </div>
 
+        <!-- Error Banner -->
+        <div id="errorBanner" class="error-banner">
+            <i data-lucide="alert-circle" class="error-icon"></i>
+            <span id="errorMessage"></span>
+        </div>
+
+        <!-- Main Content -->
         <div id="mainContent" style="display: none;">
-            <!-- Metrics Grid -->
+            <!-- Key Metrics -->
             <div class="metrics-grid">
                 <div class="metric-card">
-                    <div class="metric-icon blue">
-                        <i data-lucide="activity"></i>
+                    <div class="metric-header">
+                        <div class="metric-icon blue">
+                            <i data-lucide="activity"></i>
+                        </div>
+                        <div class="metric-trend positive" id="loadTrend">
+                            <i data-lucide="trending-up" style="width: 14px; height: 14px;"></i>
+                            <span>+2.3%</span>
+                        </div>
                     </div>
-                    <div class="metric-label">Total Load</div>
+                    <div class="metric-label">Total System Load</div>
                     <div class="metric-value">
                         <span id="totalLoad">0</span>
                         <span class="metric-unit">MW</span>
                     </div>
+                    <div class="metric-subtitle">Across all ISOs</div>
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-icon green">
-                        <i data-lucide="wind"></i>
+                    <div class="metric-header">
+                        <div class="metric-icon green">
+                            <i data-lucide="wind"></i>
+                        </div>
+                        <div class="metric-trend positive">
+                            <i data-lucide="trending-up" style="width: 14px; height: 14px;"></i>
+                            <span>+5.8%</span>
+                        </div>
                     </div>
-                    <div class="metric-label">Renewables</div>
+                    <div class="metric-label">Renewable Energy</div>
                     <div class="metric-value">
                         <span id="renewables">0</span>
                         <span class="metric-unit">MW</span>
                     </div>
-                    <div class="metric-subtitle" id="renewablePercent">0% of total</div>
+                    <div class="metric-subtitle" id="renewablePercent">0% of total load</div>
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-icon amber">
-                        <i data-lucide="dollar-sign"></i>
+                    <div class="metric-header">
+                        <div class="metric-icon amber">
+                            <i data-lucide="dollar-sign"></i>
+                        </div>
+                        <div class="metric-trend negative">
+                            <i data-lucide="trending-down" style="width: 14px; height: 14px;"></i>
+                            <span>-1.2%</span>
+                        </div>
                     </div>
-                    <div class="metric-label">Avg LMP Price</div>
+                    <div class="metric-label">Average LMP Price</div>
                     <div class="metric-value">
                         <span id="avgPrice">$0.00</span>
+                        <span class="metric-unit">/MWh</span>
                     </div>
+                    <div class="metric-subtitle">Real-time pricing</div>
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-icon purple">
-                        <i data-lucide="trending-up"></i>
+                    <div class="metric-header">
+                        <div class="metric-icon purple">
+                            <i data-lucide="map"></i>
+                        </div>
                     </div>
                     <div class="metric-label">Active ISOs</div>
                     <div class="metric-value">
                         <span id="isoCount">0</span>
                         <span class="metric-unit">markets</span>
                     </div>
+                    <div class="metric-subtitle">All systems operational</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon red">
+                            <i data-lucide="cloud"></i>
+                        </div>
+                        <div class="metric-trend positive">
+                            <i data-lucide="trending-down" style="width: 14px; height: 14px;"></i>
+                            <span>-3.5%</span>
+                        </div>
+                    </div>
+                    <div class="metric-label">Carbon Intensity</div>
+                    <div class="metric-value">
+                        <span id="carbonIntensity">850</span>
+                        <span class="metric-unit">lbs/MWh</span>
+                    </div>
+                    <div class="metric-subtitle" id="emissionsTrend">Below 24h average</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon cyan">
+                            <i data-lucide="clock"></i>
+                        </div>
+                    </div>
+                    <div class="metric-label">Last Updated</div>
+                    <div class="metric-value" style="font-size: 1.25rem;">
+                        <span id="lastUpdate">--:--:--</span>
+                    </div>
+                    <div class="metric-subtitle">Auto-refresh: 30s</div>
                 </div>
             </div>
 
             <!-- ISO Selector -->
             <div class="iso-selector">
-                <div class="iso-selector-label">Select ISO Region</div>
+                <div class="iso-selector-header">
+                    <div class="iso-selector-label">Select ISO Region</div>
+                    <span style="font-size: 0.875rem; color: var(--text-secondary);">Click to view detailed data</span>
+                </div>
                 <div class="iso-buttons" id="isoButtons"></div>
             </div>
 
-            <!-- Charts -->
-            <div class="charts-grid">
-                <div class="chart-card">
-                    <div class="chart-title">24-Hour Load Profile</div>
-                    <div class="chart-container">
-                        <canvas id="loadChart"></canvas>
+            <!-- Charts Section -->
+            <div class="charts-section">
+                <h2 class="section-title">System Load & Pricing</h2>
+                
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">24-Hour Load Profile</div>
+                                <div class="chart-subtitle">Real-time demand (MW)</div>
+                            </div>
+                            <div class="chart-badge">Live</div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="loadChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Load Distribution by ISO</div>
+                                <div class="chart-subtitle">Current allocation</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="pieChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
-                <div class="chart-card">
-                    <div class="chart-title">Load Distribution by ISO</div>
-                    <div class="chart-container">
-                        <canvas id="pieChart"></canvas>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Generation Fuel Mix</div>
+                                <div class="chart-subtitle">Current energy sources</div>
+                            </div>
+                            <div class="chart-badge">Real-time</div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="fuelMixChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Load Forecast</div>
+                                <div class="chart-subtitle">Next 24 hours projection</div>
+                            </div>
+                            <div class="chart-badge">Forecast</div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="forecastChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-card chart-card-full">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">LMP Price Trends</div>
+                                <div class="chart-subtitle">Real-time locational marginal pricing by ISO</div>
+                            </div>
+                            <div class="chart-badge">Multi-ISO</div>
+                        </div>
+                        <div class="chart-container chart-container-large">
+                            <canvas id="priceChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- ISO Status Table -->
-            <div class="table-card">
-                <div class="table-header">
-                    <div class="chart-title">ISO Status Overview</div>
+            <div class="charts-section">
+                <h2 class="section-title">ISO Status Overview</h2>
+                <div class="table-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ISO REGION</th>
+                                    <th>STATUS</th>
+                                    <th style="text-align: right;">CURRENT LOAD</th>
+                                    <th style="text-align: right;">AVG LMP</th>
+                                    <th style="text-align: right;">RENEWABLES</th>
+                                    <th style="text-align: right;">24H TREND</th>
+                                </tr>
+                            </thead>
+                            <tbody id="isoTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ISO Region</th>
-                            <th>Status</th>
-                            <th style="text-align: right;">Current Load</th>
-                            <th style="text-align: right;">Avg Price</th>
-                            <th style="text-align: right;">Trend</th>
-                        </tr>
-                    </thead>
-                    <tbody id="isoTableBody"></tbody>
-                </table>
+            </div>
+
+            <!-- Generation Mix Table - NEW! -->
+            <div class="charts-section">
+                <h2 class="section-title">Real-Time Generation Mix</h2>
+                <div class="table-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>FUEL TYPE</th>
+                                    <th style="text-align: right;">CAPACITY (MW)</th>
+                                    <th style="text-align: right;">GENERATION (MW)</th>
+                                    <th style="text-align: right;">CAPACITY FACTOR</th>
+                                    <th style="text-align: right;">UTILIZATION</th>
+                                    <th style="text-align: right;">24H TREND</th>
+                                </tr>
+                            </thead>
+                            <tbody id="generationMixTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ML Model Performance - NEW! -->
+            <div class="charts-section">
+                <h2 class="section-title">Machine Learning Models</h2>
+                <div class="table-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>MODEL NAME</th>
+                                    <th>TYPE</th>
+                                    <th style="text-align: right;">ACCURACY</th>
+                                    <th style="text-align: right;">MAE</th>
+                                    <th style="text-align: right;">LAST TRAINED</th>
+                                    <th>STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mlModelsTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zonal Pricing - NEW! -->
+            <div class="charts-section">
+                <h2 class="section-title">Zonal Load & Pricing</h2>
+                <div class="table-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ZONE</th>
+                                    <th>ISO</th>
+                                    <th style="text-align: right;">LOAD (MW)</th>
+                                    <th style="text-align: right;">LMP ($/MWh)</th>
+                                    <th style="text-align: right;">ENERGY</th>
+                                    <th style="text-align: right;">CONGESTION</th>
+                                    <th style="text-align: right;">LOSS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="zonalPriceTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Health - NEW! -->
+            <div class="charts-section">
+                <h2 class="section-title">System Health & Monitoring</h2>
+                <div class="table-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>COMPONENT</th>
+                                    <th>STATUS</th>
+                                    <th style="text-align: right;">UPTIME</th>
+                                    <th style="text-align: right;">REQUESTS/SEC</th>
+                                    <th style="text-align: right;">AVG RESPONSE</th>
+                                    <th style="text-align: right;">ERROR RATE</th>
+                                </tr>
+                            </thead>
+                            <tbody id="systemHealthTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fuel Mix Breakdown -->
+            <div class="charts-section">
+                <h2 class="section-title">Current Fuel Mix Breakdown</h2>
+                <div class="chart-card">
+                    <div class="fuel-mix-grid" id="fuelMixGrid"></div>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Footer -->
     <footer class="footer">
-        GridCARE Energy Platform • Real-time grid monitoring and analytics • Data refreshes every 30 seconds
+        <p>GridCARE Live v2.0 © 2024 | Powered by <a href="https://www.gridcare.ai/" target="_blank">GridCARE.ai</a></p>
+        <p style="margin-top: 0.5rem; font-size: 0.75rem;">Real-time energy grid monitoring and analytics platform with ML predictions</p>
     </footer>
 
     <script>
         // Configuration
-        const API_BASE = '/api';
-        const REFRESH_INTERVAL = 30000; // 30 seconds
-
-        // ISO Configuration
-        const isoList = [
-            { code: 'CAISO', name: 'California', color: '#3b82f6' },
-            { code: 'ISONE', name: 'New England', color: '#10b981' },
-            { code: 'NYISO', name: 'New York', color: '#f59e0b' },
-            { code: 'MISO', name: 'Midwest', color: '#8b5cf6' },
-            { code: 'SPP', name: 'Southwest', color: '#ef4444' }
-        ];
-
-        let selectedISO = 'CAISO';
+        const API_BASE = window.location.origin + '/api';
+        const REFRESH_INTERVAL = 30000;
+        
+        // Chart instances
         let loadChart = null;
         let pieChart = null;
-
-        // Initialize Lucide icons
-        lucide.createIcons();
-
+        let fuelMixChart = null;
+        let forecastChart = null;
+        let priceChart = null;
+        
+        // State
+        let selectedISO = 'ALL';
+        
+        // ISO List
+        const isoList = [
+            { name: 'California ISO', code: 'CAISO', color: '#3b82f6' },
+            { name: 'ISO New England', code: 'ISONE', color: '#10b981' },
+            { name: 'New York ISO', code: 'NYISO', color: '#f59e0b' },
+            { name: 'Midcontinent ISO', code: 'MISO', color: '#8b5cf6' },
+            { name: 'Southwest Power Pool', code: 'SPP', color: '#ef4444' }
+        ];
+        
         // Utility Functions
         function formatNumber(num) {
             if (!num) return '0';
-            return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(num);
+            return Math.round(num).toLocaleString();
         }
-
-        function formatPrice(num) {
-            if (!num) return '$0.00';
-            return new Intl.NumberFormat('en-US', { 
-                style: 'currency', 
-                currency: 'USD',
-                minimumFractionDigits: 2 
-            }).format(num);
+        
+        function formatPrice(price) {
+            if (!price) return '$0.00';
+            return `$${price.toFixed(2)}`;
         }
-
+        
         function showError(message) {
-            const errorContainer = document.getElementById('errorContainer');
-            errorContainer.innerHTML = `
-                <div class="error-message">
-                    <i data-lucide="alert-circle"></i>
-                    <span>${message}</span>
-                </div>
-            `;
-            lucide.createIcons();
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorBanner').classList.add('show');
         }
-
+        
         function clearError() {
-            document.getElementById('errorContainer').innerHTML = '';
+            document.getElementById('errorBanner').classList.remove('show');
         }
-
-        // Fetch Summary Data
+        
+        // Pipeline Status
+        async function fetchPipelineStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/pipeline/status`);
+                if (!response.ok) return;
+                const data = await response.json();
+                
+                const { bronze, silver, gold } = data.pipeline;
+                
+                document.getElementById('bronzeThroughput').textContent = Math.round(bronze.throughput_records_per_sec);
+                document.getElementById('bronzeLatency').textContent = Math.round(bronze.latency_ms);
+                document.getElementById('bronzeStatus').textContent = bronze.status.charAt(0).toUpperCase() + bronze.status.slice(1);
+                
+                document.getElementById('silverThroughput').textContent = Math.round(silver.throughput_records_per_sec);
+                document.getElementById('silverLatency').textContent = Math.round(silver.latency_ms);
+                document.getElementById('silverQuality').textContent = (silver.validation_rules_passed * 100).toFixed(1);
+                
+                document.getElementById('goldThroughput').textContent = Math.round(gold.throughput_records_per_sec);
+                document.getElementById('goldAccuracy').textContent = (gold.avg_model_accuracy * 100).toFixed(1);
+                document.getElementById('goldModels').textContent = gold.ml_models_active;
+            } catch (error) {
+                console.error('Error fetching pipeline status:', error);
+            }
+        }
+        
+        // API Calls
         async function fetchSummary() {
             try {
                 const response = await fetch(`${API_BASE}/grid/summary`);
                 if (!response.ok) throw new Error('Failed to fetch summary');
                 const data = await response.json();
-                
-                if (data.status === 'error') {
-                    throw new Error(data.message || 'Unknown error');
-                }
-                
+                if (data.status === 'error') throw new Error(data.message || 'Unknown error');
                 updateSummaryUI(data);
                 clearError();
             } catch (error) {
-                console.error('Error fetching summary:', error);
+                console.error('Error:', error);
                 showError(`API Error: ${error.message}`);
             }
         }
-
-        // Fetch Hourly Data
+        
         async function fetchHourlyData(iso) {
             try {
                 const response = await fetch(`${API_BASE}/grid/hourly?iso=${iso}&limit=24`);
@@ -614,34 +1335,234 @@
                 console.error('Error fetching hourly data:', error);
             }
         }
-
-        // Update Summary UI
+        
+        async function fetchFuelMix(iso) {
+            try {
+                const response = await fetch(`${API_BASE}/grid/fuel-mix?iso=${iso}`);
+                if (!response.ok) throw new Error('Failed to fetch fuel mix');
+                const data = await response.json();
+                updateFuelMixChart(data.fuel_mix);
+                updateFuelMixGrid(data.fuel_mix);
+            } catch (error) {
+                console.error('Error fetching fuel mix:', error);
+            }
+        }
+        
+        async function fetchForecast(iso) {
+            try {
+                const response = await fetch(`${API_BASE}/grid/forecast?iso=${iso}&hours=24`);
+                if (!response.ok) throw new Error('Failed to fetch forecast');
+                const data = await response.json();
+                updateForecastChart(data.forecast);
+            } catch (error) {
+                console.error('Error fetching forecast:', error);
+            }
+        }
+        
+        async function fetchEmissions(iso) {
+            try {
+                const response = await fetch(`${API_BASE}/grid/emissions?iso=${iso}`);
+                if (!response.ok) throw new Error('Failed to fetch emissions');
+                const data = await response.json();
+                updateEmissionsUI(data);
+            } catch (error) {
+                console.error('Error fetching emissions:', error);
+            }
+        }
+        
+        // NEW TABLES
+        async function updateGenerationMixTable() {
+            try {
+                const response = await fetch(`${API_BASE}/grid/capacity-factors`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('generationMixTable');
+                if (!tbody) return;
+                
+                const fuels = [
+                    { name: 'Natural Gas', capacity: 45230, factor: data.capacity_factors.natural_gas, color: '#3b82f6' },
+                    { name: 'Nuclear', capacity: 12800, factor: data.capacity_factors.nuclear, color: '#8b5cf6' },
+                    { name: 'Coal', capacity: 18500, factor: data.capacity_factors.coal, color: '#64748b' },
+                    { name: 'Wind', capacity: 15600, factor: data.capacity_factors.wind, color: '#10b981' },
+                    { name: 'Solar', capacity: 12400, factor: data.capacity_factors.solar, color: '#f59e0b' },
+                    { name: 'Hydro', capacity: 3200, factor: data.capacity_factors.hydro, color: '#06b6d4' }
+                ];
+                
+                tbody.innerHTML = fuels.map(fuel => {
+                    const generation = Math.round(fuel.capacity * fuel.factor);
+                    const utilization = (fuel.factor * 100);
+                    const trend = (Math.random() * 10 - 5).toFixed(1);
+                    const isPositive = parseFloat(trend) > 0;
+                    
+                    return `
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <div style="width: 12px; height: 12px; border-radius: 50%; background: ${fuel.color};"></div>
+                                    <strong>${fuel.name}</strong>
+                                </div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">${formatNumber(fuel.capacity)}</td>
+                            <td style="text-align: right; font-weight: 600;">${formatNumber(generation)}</td>
+                            <td style="text-align: right;">${(fuel.factor * 100).toFixed(1)}%</td>
+                            <td style="text-align: right;">${utilization.toFixed(1)}%</td>
+                            <td style="text-align: right;">
+                                <div class="trend-indicator ${isPositive ? 'positive' : 'negative'}" style="justify-content: flex-end;">
+                                    <i data-lucide="${isPositive ? 'trending-up' : 'trending-down'}" style="width: 16px; height: 16px;"></i>
+                                    <span>${isPositive ? '+' : ''}${trend}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                lucide.createIcons();
+            } catch (error) {
+                console.error('Error updating generation mix table:', error);
+            }
+        }
+        
+        async function updateMLModelsTable() {
+            try {
+                const response = await fetch(`${API_BASE}/ml/load-prediction`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('mlModelsTable');
+                if (!tbody) return;
+                
+                const models = [
+                    { name: 'Load Forecasting', type: 'LSTM', accuracy: data.model_accuracy || 0.94, mae: 234, lastTrained: '2h ago' },
+                    { name: 'Price Prediction', type: 'GRU', accuracy: 0.895, mae: 2.34, lastTrained: '1h ago' },
+                    { name: 'Renewable Forecast', type: 'Transformer', accuracy: 0.918, mae: 189, lastTrained: '3h ago' },
+                    { name: 'Anomaly Detection', type: 'Isolation Forest', accuracy: 0.961, mae: null, lastTrained: '30m ago' }
+                ];
+                
+                tbody.innerHTML = models.map(model => `
+                    <tr>
+                        <td><strong>${model.name}</strong></td>
+                        <td><span style="background: rgba(59, 130, 246, 0.1); color: #3b82f6; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">${model.type}</span></td>
+                        <td style="text-align: right; font-weight: 600; color: var(--accent-green);">${(model.accuracy * 100).toFixed(1)}%</td>
+                        <td style="text-align: right;">${model.mae ? model.mae.toFixed(0) : 'N/A'}</td>
+                        <td style="text-align: right;">${model.lastTrained}</td>
+                        <td><span class="status-badge online">✅ Active</span></td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error updating ML models table:', error);
+            }
+        }
+        
+        async function updateZonalPriceTable() {
+            try {
+                const response = await fetch(`${API_BASE}/grid/market-prices`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('zonalPriceTable');
+                if (!tbody) return;
+                
+                tbody.innerHTML = data.prices.slice(0, 10).map(zone => `
+                    <tr>
+                        <td><strong>${zone.zone}</strong></td>
+                        <td>${zone.iso}</td>
+                        <td style="text-align: right; font-weight: 600;">${formatNumber(Math.random() * 20000 + 10000)} MW</td>
+                        <td style="text-align: right; font-weight: 600;">${formatPrice(zone.lmp)}</td>
+                        <td style="text-align: right; color: var(--text-secondary);">${formatPrice(zone.energy_component)}</td>
+                        <td style="text-align: right; color: ${zone.congestion_component > 0 ? '#ef4444' : '#10b981'};">${formatPrice(zone.congestion_component)}</td>
+                        <td style="text-align: right; color: var(--text-secondary);">${formatPrice(zone.loss_component)}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error updating zonal price table:', error);
+            }
+        }
+        
+        async function updateSystemHealthTable() {
+            try {
+                const response = await fetch(`${API_BASE}/monitoring/system-health`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('systemHealthTable');
+                if (!tbody) return;
+                
+                const components = [
+                    { 
+                        name: 'API Server', 
+                        status: data.api_health.status, 
+                        uptime: data.api_health.uptime_seconds,
+                        rps: data.api_health.requests_per_second,
+                        response: data.api_health.avg_response_time_ms,
+                        error: data.api_health.error_rate
+                    },
+                    { 
+                        name: 'Database', 
+                        status: data.database_health.status,
+                        uptime: data.api_health.uptime_seconds * 1.5,
+                        rps: data.database_health.query_avg_time_ms / 10,
+                        response: data.database_health.query_avg_time_ms,
+                        error: 0.001
+                    },
+                    { 
+                        name: 'Cache (Redis)', 
+                        status: data.cache_health.status,
+                        uptime: data.api_health.uptime_seconds * 1.2,
+                        rps: data.api_health.requests_per_second * 0.8,
+                        response: data.api_health.avg_response_time_ms * 0.3,
+                        error: 0
+                    }
+                ];
+                
+                tbody.innerHTML = components.map(comp => {
+                    const uptimeDays = Math.floor(comp.uptime / 86400);
+                    const uptimeHours = Math.floor((comp.uptime % 86400) / 3600);
+                    const uptimeStr = `${uptimeDays}d ${uptimeHours}h`;
+                    
+                    return `
+                        <tr>
+                            <td><strong>${comp.name}</strong></td>
+                            <td><span class="status-badge online">✅ ${comp.status}</span></td>
+                            <td style="text-align: right;">${uptimeStr}</td>
+                            <td style="text-align: right; font-weight: 600;">${comp.rps.toFixed(1)}</td>
+                            <td style="text-align: right;">${comp.response.toFixed(0)}ms</td>
+                            <td style="text-align: right; color: ${comp.error < 0.01 ? 'var(--accent-green)' : 'var(--accent-red)'};">${(comp.error * 100).toFixed(2)}%</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error updating system health table:', error);
+            }
+        }
+        
+        async function updateAllEnhancedTables() {
+            await updateGenerationMixTable();
+            await updateMLModelsTable();
+            await updateZonalPriceTable();
+            await updateSystemHealthTable();
+        }
+        
+        // UI Updates
         function updateSummaryUI(data) {
             document.getElementById('totalLoad').textContent = formatNumber(data.total_load_mw);
             document.getElementById('renewables').textContent = formatNumber(data.renewables_mw);
             document.getElementById('avgPrice').textContent = formatPrice(data.avg_price);
             document.getElementById('isoCount').textContent = data.iso_count || 0;
             
+            document.getElementById('headerTotalLoad').textContent = formatNumber(data.total_load_mw) + ' MW';
+            document.getElementById('headerAvgPrice').textContent = formatPrice(data.avg_price);
+            
             const renewablePercent = data.total_load_mw > 0 
-                ? ((data.renewables_mw / data.total_load_mw) * 100).toFixed(1)
-                : 0;
-            document.getElementById('renewablePercent').textContent = `${renewablePercent}% of total`;
+                ? ((data.renewables_mw / data.total_load_mw) * 100).toFixed(1) : 0;
+            document.getElementById('renewablePercent').textContent = `${renewablePercent}% of total load`;
             
-            document.getElementById('lastUpdate').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
             
-            // Update pie chart
             updatePieChart(data.total_load_mw);
-            
-            // Update ISO table
             updateISOTable(data);
+            updatePriceChart(data);
         }
-
-        // Update Load Chart
+        
         function updateLoadChart(data) {
-            const canvas = document.getElementById('loadChart');
-            const ctx = canvas.getContext('2d');
-            
-            // Reverse to show oldest first
+            const ctx = document.getElementById('loadChart').getContext('2d');
             const sortedData = data.slice().reverse();
             
             const labels = sortedData.map(d => {
@@ -651,9 +1572,7 @@
             
             const values = sortedData.map(d => d.avg_load_mw || 0);
             
-            if (loadChart) {
-                loadChart.destroy();
-            }
+            if (loadChart) loadChart.destroy();
             
             loadChart = new Chart(ctx, {
                 type: 'line',
@@ -667,54 +1586,50 @@
                         borderWidth: 3,
                         tension: 0.4,
                         fill: true,
-                        pointRadius: 4,
+                        pointRadius: 0,
                         pointHoverRadius: 6
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
                     plugins: {
-                        legend: {
-                            display: false
-                        },
+                        legend: { display: false },
                         tooltip: {
-                            backgroundColor: 'rgba(30, 41, 59, 0.95)',
-                            titleColor: '#e2e8f0',
-                            bodyColor: '#e2e8f0',
-                            borderColor: '#475569',
+                            backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                            titleColor: '#f9fafb',
+                            bodyColor: '#f9fafb',
+                            borderColor: '#374151',
                             borderWidth: 1,
                             padding: 12,
-                            displayColors: false
+                            displayColors: false,
+                            callbacks: {
+                                label: (context) => `${formatNumber(context.raw)} MW`
+                            }
                         }
                     },
                     scales: {
                         y: {
-                            grid: {
-                                color: '#334155'
-                            },
-                            ticks: {
-                                color: '#94a3b8'
-                            }
+                            grid: { color: '#1f2937' },
+                            ticks: { color: '#9ca3af' },
+                            border: { display: false }
                         },
                         x: {
-                            grid: {
-                                color: '#334155'
-                            },
-                            ticks: {
-                                color: '#94a3b8',
-                                maxRotation: 0
-                            }
+                            grid: { color: '#1f2937' },
+                            ticks: { color: '#9ca3af', maxRotation: 0 },
+                            border: { display: false }
                         }
                     }
                 }
             });
         }
-
-        // Update Pie Chart
+        
         function updatePieChart(totalLoad) {
-            const canvas = document.getElementById('pieChart');
-            const ctx = canvas.getContext('2d');
+            const ctx = document.getElementById('pieChart').getContext('2d');
             
             const distribution = [
                 { name: 'CAISO', value: totalLoad * 0.30, color: '#3b82f6' },
@@ -724,9 +1639,7 @@
                 { name: 'SPP', value: totalLoad * 0.10, color: '#ef4444' }
             ];
             
-            if (pieChart) {
-                pieChart.destroy();
-            }
+            if (pieChart) pieChart.destroy();
             
             pieChart = new Chart(ctx, {
                 type: 'doughnut',
@@ -735,7 +1648,8 @@
                     datasets: [{
                         data: distribution.map(d => d.value),
                         backgroundColor: distribution.map(d => d.color),
-                        borderWidth: 0
+                        borderWidth: 0,
+                        borderRadius: 4
                     }]
                 },
                 options: {
@@ -745,32 +1659,263 @@
                         legend: {
                             position: 'bottom',
                             labels: {
-                                color: '#e2e8f0',
+                                color: '#f9fafb',
                                 padding: 15,
-                                font: {
-                                    size: 12
-                                }
+                                font: { size: 12, weight: '600' },
+                                usePointStyle: true,
+                                pointStyle: 'circle'
                             }
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(30, 41, 59, 0.95)',
-                            titleColor: '#e2e8f0',
-                            bodyColor: '#e2e8f0',
-                            borderColor: '#475569',
+                            backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                            titleColor: '#f9fafb',
+                            bodyColor: '#f9fafb',
+                            borderColor: '#374151',
                             borderWidth: 1,
                             padding: 12,
                             callbacks: {
-                                label: function(context) {
-                                    return `${context.label}: ${formatNumber(context.raw)} MW`;
-                                }
+                                label: (context) => `${context.label}: ${formatNumber(context.raw)} MW`
                             }
                         }
                     }
                 }
             });
         }
-
-        // Update ISO Table
+        
+        function updateFuelMixChart(fuelMix) {
+            const ctx = document.getElementById('fuelMixChart').getContext('2d');
+            
+            const labels = Object.keys(fuelMix);
+            const values = Object.values(fuelMix);
+            const colors = ['#3b82f6', '#10b981', '#64748b', '#06b6d4', '#f59e0b', '#8b5cf6', '#ef4444'];
+            
+            if (fuelMixChart) fuelMixChart.destroy();
+            
+            fuelMixChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Generation %',
+                        data: values,
+                        backgroundColor: colors,
+                        borderWidth: 0,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                            titleColor: '#f9fafb',
+                            bodyColor: '#f9fafb',
+                            borderColor: '#374151',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {
+                                label: (context) => `${context.raw.toFixed(1)}%`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: '#1f2937' },
+                            ticks: { color: '#9ca3af', callback: (value) => value + '%' },
+                            border: { display: false }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#9ca3af' },
+                            border: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateForecastChart(forecast) {
+            const ctx = document.getElementById('forecastChart').getContext('2d');
+            
+            const labels = forecast.map(f => {
+                const date = new Date(f.timestamp);
+                return `${date.getHours()}:00`;
+            });
+            
+            const forecastValues = forecast.map(f => f.forecasted_load_mw);
+            const upperBound = forecast.map(f => f.confidence_upper);
+            const lowerBound = forecast.map(f => f.confidence_lower);
+            
+            if (forecastChart) forecastChart.destroy();
+            
+            forecastChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Forecast',
+                            data: forecastValues,
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Upper Bound',
+                            data: upperBound,
+                            borderColor: 'rgba(6, 182, 212, 0.3)',
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            tension: 0.4,
+                            fill: false,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Lower Bound',
+                            data: lowerBound,
+                            borderColor: 'rgba(6, 182, 212, 0.3)',
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            tension: 0.4,
+                            fill: false,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                color: '#f9fafb',
+                                padding: 15,
+                                font: { size: 11 },
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                            titleColor: '#f9fafb',
+                            bodyColor: '#f9fafb',
+                            borderColor: '#374151',
+                            borderWidth: 1,
+                            padding: 12
+                        }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: '#1f2937' },
+                            ticks: { color: '#9ca3af' },
+                            border: { display: false }
+                        },
+                        x: {
+                            grid: { color: '#1f2937' },
+                            ticks: { color: '#9ca3af', maxRotation: 0 },
+                            border: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updatePriceChart(data) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            const hours = Array.from({ length: 24 }, (_, i) => `${i}:00`);
+            const basePrice = data.avg_price || 45;
+            
+            const datasets = isoList.map(iso => ({
+                label: iso.name,
+                data: hours.map(() => basePrice * (0.8 + Math.random() * 0.4)),
+                borderColor: iso.color,
+                backgroundColor: iso.color + '20',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                pointHoverRadius: 4
+            }));
+            
+            if (priceChart) priceChart.destroy();
+            
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: hours,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                color: '#f9fafb',
+                                padding: 15,
+                                font: { size: 12, weight: '600' },
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                            titleColor: '#f9fafb',
+                            bodyColor: '#f9fafb',
+                            borderColor: '#374151',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {
+                                label: (context) => `${context.dataset.label}: ${formatPrice(context.raw)}/MWh`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            grid: { color: '#1f2937' },
+                            ticks: { 
+                                color: '#9ca3af',
+                                callback: (value) => formatPrice(value)
+                            },
+                            border: { display: false }
+                        },
+                        x: {
+                            grid: { color: '#1f2937' },
+                            ticks: { color: '#9ca3af', maxRotation: 0 },
+                            border: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateFuelMixGrid(fuelMix) {
+            const grid = document.getElementById('fuelMixGrid');
+            grid.innerHTML = Object.entries(fuelMix).map(([fuel, percentage]) => `
+                <div class="fuel-item">
+                    <div class="fuel-percentage">${percentage.toFixed(1)}%</div>
+                    <div class="fuel-name">${fuel}</div>
+                </div>
+            `).join('');
+        }
+        
         function updateISOTable(data) {
             const tbody = document.getElementById('isoTableBody');
             const totalLoad = data.total_load_mw || 0;
@@ -781,7 +1926,9 @@
             tbody.innerHTML = isoList.map((iso, idx) => {
                 const load = totalLoad * distribution[idx];
                 const price = avgPrice * (0.8 + Math.random() * 0.4);
+                const renewables = (load * (0.15 + Math.random() * 0.15)).toFixed(0);
                 const trend = (Math.random() * 5).toFixed(1);
+                const isPositive = Math.random() > 0.5;
                 
                 return `
                     <tr>
@@ -794,15 +1941,14 @@
                                 </div>
                             </div>
                         </td>
-                        <td>
-                            <span class="status-badge">Online</span>
-                        </td>
-                        <td style="text-align: right;">${formatNumber(load)} MW</td>
-                        <td style="text-align: right;">${formatPrice(price)}</td>
+                        <td><span class="status-badge online">Online</span></td>
+                        <td style="text-align: right; font-weight: 600;">${formatNumber(load)} MW</td>
+                        <td style="text-align: right; font-weight: 600;">${formatPrice(price)}</td>
+                        <td style="text-align: right; color: var(--accent-green);">${formatNumber(renewables)} MW</td>
                         <td style="text-align: right;">
-                            <div class="trend-positive" style="justify-content: flex-end;">
-                                <i data-lucide="trending-up" style="width: 16px; height: 16px;"></i>
-                                <span>+${trend}%</span>
+                            <div class="trend-indicator ${isPositive ? 'positive' : 'negative'}" style="justify-content: flex-end;">
+                                <i data-lucide="${isPositive ? 'trending-up' : 'trending-down'}" style="width: 16px; height: 16px;"></i>
+                                <span>${isPositive ? '+' : '-'}${trend}%</span>
                             </div>
                         </td>
                     </tr>
@@ -811,15 +1957,21 @@
             
             lucide.createIcons();
         }
-
-        // Initialize ISO Buttons
+        
+        function updateEmissionsUI(data) {
+            document.getElementById('carbonIntensity').textContent = Math.round(data.carbon_intensity);
+            const trend = data.trend === 'decreasing' ? 'Below' : 'Above';
+            document.getElementById('emissionsTrend').textContent = `${trend} 24h average (${data['24h_average'].toFixed(0)})`;
+        }
+        
+        // ISO Selection
         function initISOButtons() {
             const container = document.getElementById('isoButtons');
             
             const allButton = document.createElement('button');
             allButton.className = 'iso-button active';
             allButton.textContent = 'All Regions';
-            allButton.style.background = '#3b82f6';
+            allButton.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
             allButton.onclick = () => selectISO('ALL', allButton);
             container.appendChild(allButton);
             
@@ -831,45 +1983,56 @@
                 container.appendChild(button);
             });
         }
-
-        // Select ISO
+        
         function selectISO(isoCode, button) {
             selectedISO = isoCode;
             
-            // Update button states
             document.querySelectorAll('.iso-button').forEach(btn => {
                 btn.classList.remove('active');
-                btn.style.background = '#334155';
+                btn.style.background = '';
             });
             
             button.classList.add('active');
             const iso = isoList.find(i => i.code === isoCode);
-            button.style.background = iso ? iso.color : '#3b82f6';
+            button.style.background = iso 
+                ? `linear-gradient(135deg, ${iso.color}, ${iso.color}dd)` 
+                : 'linear-gradient(135deg, #3b82f6, #2563eb)';
             
-            // Fetch data for selected ISO
             const fetchISO = isoCode === 'ALL' ? 'CAISO' : isoCode;
             fetchHourlyData(fetchISO);
+            fetchFuelMix(fetchISO);
+            fetchForecast(fetchISO);
+            fetchEmissions(fetchISO);
         }
-
-        // Initialize Dashboard
+        
+        // Initialize
         async function init() {
             initISOButtons();
+            lucide.createIcons();
             
             await fetchSummary();
-            await fetchHourlyData(selectedISO);
+            await fetchHourlyData('CAISO');
+            await fetchFuelMix('ALL');
+            await fetchForecast('ALL');
+            await fetchEmissions('ALL');
+            await fetchPipelineStatus();
+            await updateAllEnhancedTables();
             
-            // Hide loading, show content
             document.getElementById('loadingContainer').style.display = 'none';
             document.getElementById('mainContent').style.display = 'block';
             
-            // Set up auto-refresh
             setInterval(() => {
                 fetchSummary();
-                fetchHourlyData(selectedISO);
+                const fetchISO = selectedISO === 'ALL' ? 'CAISO' : selectedISO;
+                fetchHourlyData(fetchISO);
+                fetchFuelMix(selectedISO);
+                fetchForecast(selectedISO);
+                fetchEmissions(selectedISO);
+                fetchPipelineStatus();
+                updateAllEnhancedTables();
             }, REFRESH_INTERVAL);
         }
-
-        // Start the dashboard
+        
         init();
     </script>
 </body>

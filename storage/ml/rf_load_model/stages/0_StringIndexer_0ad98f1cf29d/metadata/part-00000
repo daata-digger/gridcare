@@ -1,1 +1,0 @@
-{"class":"org.apache.spark.ml.feature.StringIndexerModel","timestamp":1763767048227,"sparkVersion":"3.4.1","uid":"StringIndexer_0ad98f1cf29d","paramMap":{"outputCol":"iso_index","inputCol":"iso_code","handleInvalid":"keep"},"defaultParamMap":{"outputCol":"StringIndexer_0ad98f1cf29d__output","stringOrderType":"frequencyDesc","handleInvalid":"error"}}

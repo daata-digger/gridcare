@@ -1,0 +1,29 @@
+============================================================
+GRIDCARE ANOMALY ALERT SUMMARY
+============================================================
+
+Generated: 2025-11-23T00:49:40.413223+00:00
+Total Anomalies: 7
+
+
+CAISO:
+  Anomalies: 2
+    Severity 2: 2
+
+2025-11-21:
+  Anomalies: 2
+    Severity 3: 1
+    Severity 2: 1
+  Most recent critical:
+    Time: 2025-11-21 16:25:00
+    Load: 14196 MW
+    Type: rapid_change
+
+2025-11-22:
+  Anomalies: 3
+    Severity 3: 1
+    Severity 2: 2
+  Most recent critical:
+    Time: 2025-11-22 17:45:54
+    Load: 15121 MW
+    Type: rapid_change
