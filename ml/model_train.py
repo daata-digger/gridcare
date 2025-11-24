@@ -1,4 +1,3 @@
-# ml/model_train.py
 
 from pyspark.sql import SparkSession, functions as F, types as T
 from pyspark.ml import Pipeline

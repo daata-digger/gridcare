@@ -1,4 +1,3 @@
-# api/endpoints/grid.py
 from typing import List, Optional, Any, Dict
 from datetime import datetime
 from fastapi import APIRouter, Query, Request, HTTPException

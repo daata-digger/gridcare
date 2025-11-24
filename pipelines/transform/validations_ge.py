@@ -1,4 +1,4 @@
-# pipelines/transform/validations_ge.py
+
 
 from pyspark.sql import SparkSession, functions as F
 
