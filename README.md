@@ -1129,8 +1129,11 @@ redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_t
 
 
 ### Main Dashboard
-![Dashboard Overview](images/dashboard-overview.png)
-
+![Dashboard Overview](images/dashboard-overview-1.png)
+![Dashboard Overview](images/dashboard-overview-2.png)
+![Dashboard Overview](images/dashboard-overview-3.png)
+![Dashboard Overview](images/dashboard-overview-4.png)
+![Dashboard Overview](images/dashboard-overview-5.png)
 ### Data Pipeline
 ![Bronze Tier](images/pipeline-bronze.png)
 
