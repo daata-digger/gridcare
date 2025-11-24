@@ -1145,6 +1145,7 @@ redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_t
 
 ### Airflow DAGs
 ![Airflow DAGs](images/airflow-dags.png)
+![Airflow DAGs](images/image.png)
 
 ---
 

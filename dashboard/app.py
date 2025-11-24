@@ -5,6 +5,23 @@ from fastapi.responses import HTMLResponse
 from datetime import datetime, timedelta
 import random
 import json
+import time
+
+# ============================================
+# DEMO CONFIGURATION - FIXED DATE
+# ============================================
+# All timestamps will show November 21, 2025
+DEMO_DATE = datetime(2025, 11, 21, 14, 30, 0)
+START_TIME = time.time()
+
+def get_demo_time():
+    """
+    Return demo timestamp that advances in real-time from Nov 21, 2025.
+    This ensures all API responses show the demo date, not the actual date.
+    """
+    elapsed = time.time() - START_TIME
+    return DEMO_DATE + timedelta(seconds=elapsed)
+# ============================================
 
 app = FastAPI(title="GridCARE Live - Advanced Energy Grid Monitoring v2.0")
 
@@ -88,11 +105,20 @@ async def index():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "api": "running", "timestamp": datetime.now().isoformat(), "version": "2.0"}
+    current_time = get_demo_time()
+    uptime_seconds = int(time.time() - START_TIME)
+    return {
+        "status": "ok",
+        "api": "running",
+        "timestamp": current_time.isoformat(),
+        "version": "2.0",
+        "uptime_seconds": uptime_seconds
+    }
 
 @app.get("/api/grid/summary")
 async def grid_summary():
     """Get grid summary with mock data"""
+    current_time = get_demo_time()
     total_load = random.randint(80000, 95000)
     renewables = total_load * random.uniform(0.18, 0.25)
     
@@ -101,19 +127,19 @@ async def grid_summary():
         "renewables_mw": renewables,
         "avg_price": random.uniform(35.0, 65.0),
         "iso_count": 5,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": current_time.isoformat(),
         "status": "success"
     }
 
 @app.get("/api/grid/hourly")
 async def grid_hourly(iso: str = "CAISO", limit: int = 24):
     """Get hourly load data"""
-    now = datetime.now()
+    current_time = get_demo_time()
     hourly_data = []
     base_load = random.randint(15000, 25000)
     
     for i in range(limit):
-        hour_time = now - timedelta(hours=limit - i - 1)
+        hour_time = current_time - timedelta(hours=limit - i - 1)
         load_variation = random.uniform(0.85, 1.15)
         hourly_data.append({
             "hour": hour_time.isoformat(),
@@ -126,6 +152,7 @@ async def grid_hourly(iso: str = "CAISO", limit: int = 24):
 @app.get("/api/grid/fuel-mix")
 async def fuel_mix(iso: str = "ALL"):
     """Get fuel mix breakdown"""
+    current_time = get_demo_time()
     fuel_types = {
         "Natural Gas": 42.5,
         "Nuclear": 18.2,
@@ -135,17 +162,17 @@ async def fuel_mix(iso: str = "ALL"):
         "Hydro": 2.5,
         "Other": 0.6
     }
-    return {"iso": iso, "fuel_mix": fuel_types, "timestamp": datetime.now().isoformat()}
+    return {"iso": iso, "fuel_mix": fuel_types, "timestamp": current_time.isoformat()}
 
 @app.get("/api/grid/forecast")
 async def load_forecast(iso: str = "ALL", hours: int = 24):
     """Get load forecast"""
-    now = datetime.now()
+    current_time = get_demo_time()
     forecast_data = []
     base_load = random.randint(82000, 92000)
     
     for i in range(hours):
-        timestamp = now + timedelta(hours=i)
+        timestamp = current_time + timedelta(hours=i)
         hour_variation = 1.0 + (0.1 * random.random() - 0.05)
         forecasted = base_load * hour_variation
         
@@ -161,28 +188,31 @@ async def load_forecast(iso: str = "ALL", hours: int = 24):
 @app.get("/api/grid/interchange")
 async def grid_interchange():
     """Get inter-ISO power interchange"""
+    current_time = get_demo_time()
     exchanges = [
         {"from_iso": "CAISO", "to_iso": "WECC", "mw": random.randint(1000, 1500), "direction": "export"},
         {"from_iso": "MISO", "to_iso": "PJM", "mw": random.randint(700, 1000), "direction": "export"},
         {"from_iso": "NYISO", "to_iso": "ISONE", "mw": random.randint(250, 400), "direction": "import"},
         {"from_iso": "SPP", "to_iso": "MISO", "mw": random.randint(400, 700), "direction": "export"},
     ]
-    return {"exchanges": exchanges, "timestamp": datetime.now().isoformat()}
+    return {"exchanges": exchanges, "timestamp": current_time.isoformat()}
 
 @app.get("/api/grid/alerts")
 async def grid_alerts():
     """Get current grid alerts"""
-    return {"active_alerts": [], "alert_count": 0, "last_check": datetime.now().isoformat()}
+    current_time = get_demo_time()
+    return {"active_alerts": [], "alert_count": 0, "last_check": current_time.isoformat()}
 
 @app.get("/api/grid/emissions")
 async def carbon_emissions(iso: str = "ALL"):
     """Get carbon emissions intensity"""
+    current_time = get_demo_time()
     base_intensity = random.uniform(800, 900)
     return {
         "iso": iso,
         "carbon_intensity": base_intensity,
         "unit": "lbs CO2/MWh",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": current_time.isoformat(),
         "24h_average": base_intensity * 1.05,
         "trend": "decreasing" if random.random() > 0.5 else "increasing"
     }
@@ -192,12 +222,12 @@ async def carbon_emissions(iso: str = "ALL"):
 @app.get("/api/ml/load-prediction")
 async def ml_load_prediction(iso: str = "ALL", horizon: int = 168):
     """ML-based load prediction (7 days default)"""
-    now = datetime.now()
+    current_time = get_demo_time()
     predictions = []
     base_load = random.randint(80000, 95000)
     
     for i in range(horizon):
-        timestamp = now + timedelta(hours=i)
+        timestamp = current_time + timedelta(hours=i)
         # Simulate ML prediction with daily pattern
         hour_of_day = timestamp.hour
         day_pattern = 1.0 + 0.2 * (hour_of_day - 12) / 12
@@ -215,18 +245,19 @@ async def ml_load_prediction(iso: str = "ALL", horizon: int = 168):
         "iso": iso,
         "predictions": predictions,
         "model_accuracy": 0.94,
-        "last_trained": (now - timedelta(days=1)).isoformat()
+        "last_trained": (current_time - timedelta(days=1)).isoformat()
     }
 
 @app.get("/api/ml/anomaly-detection")
 async def anomaly_detection():
     """Real-time anomaly detection results"""
+    current_time = get_demo_time()
     anomalies = []
     
     # Simulate occasional anomalies
     if random.random() > 0.7:
         anomalies.append({
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": current_time.isoformat(),
             "iso": random.choice(["CAISO", "ISONE", "NYISO", "MISO", "SPP"]),
             "metric": random.choice(["load_spike", "price_spike", "frequency_deviation"]),
             "severity": random.choice(["low", "medium", "high"]),
@@ -239,17 +270,17 @@ async def anomaly_detection():
         "anomalies": anomalies,
         "total_detected": len(anomalies),
         "model": "Isolation Forest + LSTM Autoencoder",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": current_time.isoformat()
     }
 
 @app.get("/api/ml/renewable-forecast")
 async def renewable_forecast(hours: int = 48):
     """ML forecast for renewable generation"""
-    now = datetime.now()
+    current_time = get_demo_time()
     forecasts = []
     
     for i in range(hours):
-        timestamp = now + timedelta(hours=i)
+        timestamp = current_time + timedelta(hours=i)
         hour = timestamp.hour
         
         # Solar peaks during day
@@ -275,6 +306,7 @@ async def renewable_forecast(hours: int = 48):
 @app.get("/api/grid/detailed-metrics")
 async def detailed_metrics():
     """Comprehensive detailed metrics for all ISOs"""
+    current_time = get_demo_time()
     isos = ["CAISO", "ISONE", "NYISO", "MISO", "SPP"]
     detailed_data = []
     
@@ -282,7 +314,7 @@ async def detailed_metrics():
         base_load = random.randint(15000, 25000)
         detailed_data.append({
             "iso": iso,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": current_time.isoformat(),
             "load": {
                 "current_mw": base_load,
                 "forecast_1h": base_load * random.uniform(0.98, 1.02),
@@ -318,13 +350,14 @@ async def detailed_metrics():
             }
         })
     
-    return {"data": detailed_data, "timestamp": datetime.now().isoformat()}
+    return {"data": detailed_data, "timestamp": current_time.isoformat()}
 
 @app.get("/api/grid/capacity-factors")
 async def capacity_factors():
     """Real-time capacity factors for different generation types"""
+    current_time = get_demo_time()
     return {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": current_time.isoformat(),
         "capacity_factors": {
             "nuclear": random.uniform(0.90, 0.95),
             "coal": random.uniform(0.40, 0.60),
@@ -347,7 +380,7 @@ async def capacity_factors():
 @app.get("/api/grid/market-prices")
 async def market_prices():
     """Detailed market pricing across nodes and zones"""
-    now = datetime.now()
+    current_time = get_demo_time()
     prices = []
     
     zones = ["North", "South", "East", "West", "Central"]
@@ -358,7 +391,7 @@ async def market_prices():
             prices.append({
                 "iso": iso,
                 "zone": zone,
-                "timestamp": now.isoformat(),
+                "timestamp": current_time.isoformat(),
                 "lmp": random.uniform(30, 80),
                 "energy_component": random.uniform(25, 65),
                 "congestion_component": random.uniform(-5, 15),
@@ -366,16 +399,20 @@ async def market_prices():
                 "node_count": random.randint(50, 500)
             })
     
-    return {"prices": prices, "timestamp": now.isoformat()}
+    return {"prices": prices, "timestamp": current_time.isoformat()}
 
 @app.get("/api/monitoring/system-health")
 async def system_health():
     """System monitoring and health metrics"""
+    current_time = get_demo_time()
+    actual_uptime = int(time.time() - START_TIME)
+    
     return {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": current_time.isoformat(),
         "api_health": {
             "status": "healthy",
-            "uptime_seconds": random.randint(86400, 2592000),
+            "uptime_seconds": actual_uptime,
+            "uptime_display": f"{actual_uptime // 3600}h {(actual_uptime % 3600) // 60}m",
             "requests_per_second": random.uniform(10, 50),
             "avg_response_time_ms": random.uniform(50, 200),
             "error_rate": random.uniform(0, 0.02)
@@ -395,60 +432,70 @@ async def system_health():
             "evictions_per_min": random.uniform(0, 5)
         },
         "data_freshness": {
-            "last_grid_update": (datetime.now() - timedelta(seconds=random.randint(10, 60))).isoformat(),
-            "last_price_update": (datetime.now() - timedelta(seconds=random.randint(10, 60))).isoformat(),
-            "last_forecast_update": (datetime.now() - timedelta(minutes=random.randint(5, 30))).isoformat()
+            "last_grid_update": (current_time - timedelta(seconds=random.randint(10, 60))).isoformat(),
+            "last_price_update": (current_time - timedelta(seconds=random.randint(10, 60))).isoformat(),
+            "last_forecast_update": (current_time - timedelta(minutes=random.randint(5, 30))).isoformat()
         }
     }
 
 @app.get("/api/pipeline/status")
 async def pipeline_status():
     """Data pipeline status - Bronze → Silver → Gold"""
+    current_time = get_demo_time()
+    actual_uptime = int(time.time() - START_TIME)
+    
     return {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": current_time.isoformat(),
         "pipeline": {
             "bronze": {
                 "status": "active",
                 "tier": "bronze",
                 "description": "Raw data ingestion from ISO APIs",
-                "throughput_records_per_sec": random.randint(500, 1500),
+                "throughput_records_per_sec": 2845,
                 "total_records_today": random.randint(50000, 150000),
-                "latency_ms": random.uniform(10, 50),
-                "error_rate": random.uniform(0, 0.01),
+                "latency_ms": 23,
+                "error_rate": 0.002,
                 "sources_active": 5,
                 "sources_total": 5,
-                "last_update": (datetime.now() - timedelta(seconds=random.randint(1, 10))).isoformat()
+                "uptime_seconds": actual_uptime,
+                "last_update": (current_time - timedelta(seconds=random.randint(1, 10))).isoformat()
             },
             "silver": {
                 "status": "active",
                 "tier": "silver",
                 "description": "Data validation, cleaning & transformation",
-                "throughput_records_per_sec": random.randint(450, 1400),
+                "throughput_records_per_sec": 2789,
                 "total_records_today": random.randint(45000, 140000),
-                "latency_ms": random.uniform(20, 80),
-                "error_rate": random.uniform(0, 0.02),
-                "validation_rules_passed": random.uniform(0.95, 0.99),
-                "records_cleaned": random.randint(1000, 5000),
-                "last_update": (datetime.now() - timedelta(seconds=random.randint(1, 10))).isoformat()
+                "latency_ms": 45,
+                "error_rate": 0.015,
+                "validation_rules_passed": 98.5,
+                "records_cleaned": 156,
+                "uptime_seconds": actual_uptime,
+                "last_update": (current_time - timedelta(seconds=random.randint(1, 10))).isoformat()
             },
             "gold": {
                 "status": "active",
                 "tier": "gold",
                 "description": "ML predictions & advanced analytics",
-                "throughput_records_per_sec": random.randint(400, 1300),
+                "throughput_records_per_sec": 2734,
                 "total_records_today": random.randint(40000, 130000),
-                "latency_ms": random.uniform(50, 150),
-                "error_rate": random.uniform(0, 0.005),
+                "latency_ms": 67,
+                "error_rate": 0.003,
                 "ml_models_active": 4,
-                "predictions_generated": random.randint(10000, 50000),
-                "avg_model_accuracy": random.uniform(0.92, 0.98),
-                "last_update": (datetime.now() - timedelta(seconds=random.randint(1, 10))).isoformat()
+                "predictions_generated": 1234,
+                "avg_model_accuracy": 92.8,
+                "uptime_seconds": actual_uptime,
+                "last_update": (current_time - timedelta(seconds=random.randint(1, 10))).isoformat()
             }
         },
         "overall": {
             "status": "healthy",
-            "end_to_end_latency_ms": random.uniform(80, 280),
+            "end_to_end_latency_ms": 135,
             "data_quality_score": random.uniform(0.94, 0.99),
-            "uptime_percentage": random.uniform(99.5, 99.99)
+            "uptime_percentage": 99.87
         }
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)
